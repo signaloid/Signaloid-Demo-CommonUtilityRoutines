@@ -35,6 +35,42 @@
 
 #include "common.h"
 
+/**
+ *	@brief	Read data from a CSV file. Data entries are wither numbers or Ux-values.
+ *
+ *	@param	inputFilePath		path to CSV file to read from
+ *	@param	expectedHeaders		array of headers that should be in the CSV data
+ *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
+ *	@param	inputDistributionsType	specifies whether input data are single-precision or double-precision floating-point values
+ *	@param	numberOfDistributions	size of `inputDistributions` _and_ `expectedHeaders` arrays
+ *	@return				`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
+ */
+static CommonConstantReturnType
+readInputDistributionsFromCSV(
+	const char *			inputFilePath,
+	const char * const *		expectedHeaders,
+	void *				inputDistributions,
+	FloatingPointVariableType	inputDistributionsType,
+	size_t				numberOfDistributions);
+
+/**
+ *	@brief	Write Ux-valued data variables to a CSV file.
+ *
+ *	@param	outputFilePath			path prefix for the output CSV file to write to
+ *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
+ *	@param	outputVariablesType		specifies whether output data are single-precision or double-precision floating-point values
+ *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
+ *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
+ *	@return					`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
+ */
+static CommonConstantReturnType
+writeOutputDistributionsToCSV(
+	const char *			outputFilePath,
+	const void *			outputVariables,
+	FloatingPointVariableType	outputVariablesType,
+	const char * const *		outputVariableNames,
+	size_t				numberOfOutputDistributions);
+
 /*
  *	The implementation function is borrowed from googletest and prevents the compiler from
  *	optimising out the functionally redundant code. See
@@ -66,7 +102,7 @@ parseIntChecked(const char *  str, int *  out)
 
 	char *	end = NULL;
 	long	tmp = 0;
-	
+
 	errno = 0;
 	tmp = strtol(str, &end, 10);
 
@@ -100,6 +136,39 @@ parseIntChecked(const char *  str, int *  out)
 }
 
 CommonConstantReturnType
+parseFloatChecked(const char *  str, float *  out)
+{
+	assert(str != NULL);
+	assert(out != NULL);
+
+	char *	end = NULL;
+	float	tmp = 0;
+
+	errno = 0;
+	tmp = strtof(str, &end);
+
+	if (errno == ERANGE)
+	{
+		/*
+		 *	There was an double but it was out of range.
+		 */
+		return kCommonConstantReturnTypeError;
+	}
+
+	if (end == str)
+	{
+		/*
+		 *	No double found in `str`.
+		 */
+		return kCommonConstantReturnTypeError;
+	}
+
+	*out = tmp;
+
+	return kCommonConstantReturnTypeSuccess;
+}
+
+CommonConstantReturnType
 parseDoubleChecked(const char *  str, double *  out)
 {
 	assert(str != NULL);
@@ -107,7 +176,7 @@ parseDoubleChecked(const char *  str, double *  out)
 
 	char *	end = NULL;
 	double	tmp = 0;
-	
+
 	errno = 0;
 	tmp = strtod(str, &end);
 
@@ -231,11 +300,42 @@ validateInputDistributionCSVHeader(
 }
 
 CommonConstantReturnType
+readInputFloatDistributionsFromCSV(
+	const char *			inputFilePath,
+	const char * const *		expectedHeaders,
+	float *				inputDistributions,
+	size_t				numberOfDistributions)
+{
+	return readInputDistributionsFromCSV(
+						inputFilePath,
+						expectedHeaders,
+						(void * ) inputDistributions,
+						kFloatingPointVariableTypeFloat,
+						numberOfDistributions);
+}
+
+CommonConstantReturnType
+readInputDoubleDistributionsFromCSV(
+	const char *			inputFilePath,
+	const char * const *		expectedHeaders,
+	double *			inputDistributions,
+	size_t				numberOfDistributions)
+{
+	return readInputDistributionsFromCSV(
+						inputFilePath,
+						expectedHeaders,
+						(void * ) inputDistributions,
+						kFloatingPointVariableTypeDouble,
+						numberOfDistributions);
+}
+
+static CommonConstantReturnType
 readInputDistributionsFromCSV(
-	const char *		inputFilePath,
-	double *		inputDistributions,
-	const char * const *	expectedHeaders,
-	size_t			numberOfDistributions)
+	const char *			inputFilePath,
+	const char * const *		expectedHeaders,
+	void *				inputDistributions,
+	FloatingPointVariableType	inputDistributionsType,
+	size_t				numberOfDistributions)
 {
 	if (numberOfDistributions == 0)
 	{
@@ -247,7 +347,10 @@ readInputDistributionsFromCSV(
 	assert(expectedHeaders);
 
 	CommonConstantReturnType	returnCode = kCommonConstantReturnTypeError;
-	double **			inputSampleValues = NULL;
+	float **			inputFloatSampleValues = NULL;
+	double **			inputDoubleSampleValues = NULL;
+	float *				inputFloatDistributions = NULL;
+	double *			inputDoubleDistributions = NULL;
 	char *				buffer = NULL;
 	char *				token;
 	char *				strtokState;
@@ -256,16 +359,43 @@ readInputDistributionsFromCSV(
 	size_t *			sampleCounts = NULL;
 	bool *				uxColumns = NULL;
 	FILE *				fp = NULL;
-	
-	inputSampleValues = (double **)checkedCalloc(sizeof(double *), numberOfDistributions, __FILE__, __LINE__);
-	for (size_t i = 0; i < numberOfDistributions; i++)
+	float				parsedFloatValue;
+	double				parsedDoubleValue;
+
+	switch (inputDistributionsType)
 	{
-		inputSampleValues[i] = (double*)checkedCalloc(sizeof(double), kCommonConstantMaxNumberOfInputSamples, __FILE__, __LINE__);
+		case kFloatingPointVariableTypeFloat:
+		{
+			inputFloatDistributions = (float *) inputDistributions;
+
+			inputFloatSampleValues = (float **)checkedCalloc(numberOfDistributions, sizeof(double *), __FILE__, __LINE__);
+			for (size_t i = 0; i < numberOfDistributions; i++)
+			{
+				inputFloatSampleValues[i] = (float *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(float), __FILE__, __LINE__);
+			}
+			break;
+		}
+		case kFloatingPointVariableTypeDouble:
+		{
+			inputDoubleDistributions = (double *) inputDistributions;
+
+			inputDoubleSampleValues = (double **)checkedCalloc(numberOfDistributions, sizeof(double *), __FILE__, __LINE__);
+			for (size_t i = 0; i < numberOfDistributions; i++)
+			{
+				inputDoubleSampleValues[i] = (double *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(double), __FILE__, __LINE__);
+			}
+			break;
+		}
+		case kFloatingPointVariableTypeUnknown:
+		default:
+		{
+			fatal("inputDistributionsType must be specified");
+		}
 	}
 
-	buffer = (char *)checkedCalloc(sizeof(char), kCommonConstantMaxCharsPerLine, __FILE__, __LINE__);
-	uxColumns = (bool *)checkedCalloc(sizeof(bool), numberOfDistributions, __FILE__, __LINE__);
-	sampleCounts = (size_t *)checkedCalloc(sizeof(size_t), numberOfDistributions, __FILE__, __LINE__);
+	buffer = (char *)checkedCalloc(kCommonConstantMaxCharsPerLine, sizeof(char), __FILE__, __LINE__);
+	uxColumns = (bool *)checkedCalloc(numberOfDistributions, sizeof(bool), __FILE__, __LINE__);
+	sampleCounts = (size_t *)checkedCalloc(numberOfDistributions, sizeof(size_t), __FILE__, __LINE__);
 
 	if (strcmp(inputFilePath, "stdin"))
 	{
@@ -336,8 +466,6 @@ readInputDistributionsFromCSV(
 				token++;
 			}
 
-			double	value;
-
 			if (columnCount == numberOfDistributions)
 			{
 				fprintf(stderr,
@@ -377,28 +505,57 @@ readInputDistributionsFromCSV(
 					}
 				}
 
-				if (shouldIgnore)
+				if (inputDistributionsType == kFloatingPointVariableTypeFloat)
 				{
-					/*
-					 *	Ignore this entry
-					 */
-					inputSampleValues[columnCount][sampleCounts[columnCount]] = 0.0;
-				}
-				else if (parseDoubleChecked(token, &value) != kCommonConstantReturnTypeSuccess)
-				{
-					fprintf(stderr,
-						"Error: The input CSV data at row %" PRId64 " and column %zu is not a valid number (was '%s').\n",
-						rowCount,
-						columnCount,
-						token);
+					if (shouldIgnore)
+					{
+						/*
+						 *	Ignore this entry
+						 */
+						inputFloatSampleValues[columnCount][sampleCounts[columnCount]] = 0.0;
+					}
+					else if (parseFloatChecked(token, &parsedFloatValue) != kCommonConstantReturnTypeSuccess)
+					{
+						fprintf(stderr,
+							"Error: The input CSV data at row %" PRId64 " and column %zu is not a valid number (was '%s').\n",
+							rowCount,
+							columnCount,
+							token);
 
-					returnCode = kCommonConstantReturnTypeError;
-					goto cleanup;
+						returnCode = kCommonConstantReturnTypeError;
+						goto cleanup;
+					}
+					else
+					{
+						inputFloatSampleValues[columnCount][sampleCounts[columnCount]] = parsedFloatValue;
+						sampleCounts[columnCount]++;
+					}
 				}
 				else
 				{
-					inputSampleValues[columnCount][sampleCounts[columnCount]] = value;
-					sampleCounts[columnCount]++;
+					if (shouldIgnore)
+					{
+						/*
+						 *	Ignore this entry
+						 */
+						inputDoubleSampleValues[columnCount][sampleCounts[columnCount]] = 0.0;
+					}
+					else if (parseDoubleChecked(token, &parsedDoubleValue) != kCommonConstantReturnTypeSuccess)
+					{
+						fprintf(stderr,
+							"Error: The input CSV data at row %" PRId64 " and column %zu is not a valid number (was '%s').\n",
+							rowCount,
+							columnCount,
+							token);
+
+						returnCode = kCommonConstantReturnTypeError;
+						goto cleanup;
+					}
+					else
+					{
+						inputDoubleSampleValues[columnCount][sampleCounts[columnCount]] = parsedDoubleValue;
+						sampleCounts[columnCount]++;
+					}
 				}
 			}
 
@@ -427,15 +584,32 @@ readInputDistributionsFromCSV(
 	/*
 	 *	Get distributions from collected sample values.
 	 */
-	for (size_t i = 0; i < numberOfDistributions; i++)
+	if (inputDistributionsType == kFloatingPointVariableTypeFloat)
 	{
-		if (uxColumns[i])
+		for (size_t i = 0; i < numberOfDistributions; i++)
 		{
-			inputDistributions[i] = inputSampleValues[i][0];
+			if (uxColumns[i])
+			{
+				inputFloatDistributions[i] = inputFloatSampleValues[i][0];
+			}
+			else
+			{
+				inputFloatDistributions[i] = UxHwFloatDistFromSamples(inputFloatSampleValues[i], sampleCounts[i]);
+			}
 		}
-		else
+	}
+	else
+	{
+		for (size_t i = 0; i < numberOfDistributions; i++)
 		{
-			inputDistributions[i] = UxHwDoubleDistFromSamples(inputSampleValues[i], sampleCounts[i]);
+			if (uxColumns[i])
+			{
+				inputDoubleDistributions[i] = inputDoubleSampleValues[i][0];
+			}
+			else
+			{
+				inputDoubleDistributions[i] = UxHwDoubleDistFromSamples(inputDoubleSampleValues[i], sampleCounts[i]);
+			}
 		}
 	}
 
@@ -445,14 +619,25 @@ cleanup:
 
 	free(buffer);
 
-	if (inputSampleValues != NULL) 
+	if (inputFloatSampleValues != NULL)
 	{
 		for (size_t i = 0; i < numberOfDistributions; i++)
 		{
-			free(inputSampleValues[i]);
+			free(inputFloatSampleValues[i]);
 		}
+
+		free(inputFloatSampleValues);
 	}
-	free(inputSampleValues);
+
+	if (inputDoubleSampleValues != NULL)
+	{
+		for (size_t i = 0; i < numberOfDistributions; i++)
+		{
+			free(inputDoubleSampleValues[i]);
+		}
+
+		free(inputDoubleSampleValues);
+	}
 	free(sampleCounts);
 	free(uxColumns);
 
@@ -460,13 +645,46 @@ cleanup:
 }
 
 CommonConstantReturnType
-writeOutputDistributionsToCSV(
+writeOutputFloatDistributionsToCSV(
+	const char *		outputFilePath,
+	const float *		outputVariables,
+	const char * const *	outputVariableNames,
+	size_t			numberOfOutputDistributions)
+{
+	return writeOutputDistributionsToCSV(
+						outputFilePath,
+						(const void *) outputVariables,
+						kFloatingPointVariableTypeFloat,
+						outputVariableNames,
+						numberOfOutputDistributions);
+}
+
+CommonConstantReturnType
+writeOutputDoubleDistributionsToCSV(
 	const char *		outputFilePath,
 	const double *		outputVariables,
 	const char * const *	outputVariableNames,
 	size_t			numberOfOutputDistributions)
 {
+	return writeOutputDistributionsToCSV(
+						outputFilePath,
+						(const void *) outputVariables,
+						kFloatingPointVariableTypeDouble,
+						outputVariableNames,
+						numberOfOutputDistributions);
+}
+
+CommonConstantReturnType
+writeOutputDistributionsToCSV(
+	const char *			outputFilePath,
+	const void *			outputVariables,
+	FloatingPointVariableType	outputVariablesType,
+	const char * const *		outputVariableNames,
+	size_t				numberOfOutputDistributions)
+{
 	FILE *		fp = NULL;
+	float *		outputFloatVariables;
+	double *	outputDoubleVariables;
 
 	if (strcmp(outputFilePath, "stdout"))
 	{
@@ -494,12 +712,40 @@ writeOutputDistributionsToCSV(
 	}
 	fprintf(fp, "\n");
 
-	for (size_t i = 0; i < numberOfOutputDistributions; i++)
+	switch (outputVariablesType)
 	{
-		fprintf(fp, "%le", outputVariables[i]);
-		if (i != numberOfOutputDistributions - 1)
+		case kFloatingPointVariableTypeFloat:
 		{
-			fprintf(fp, ", ");
+			outputFloatVariables = (float *) outputVariables;
+
+			for (size_t i = 0; i < numberOfOutputDistributions; i++)
+			{
+				fprintf(fp, "%e", outputFloatVariables[i]);
+				if (i != numberOfOutputDistributions - 1)
+				{
+					fprintf(fp, ", ");
+				}
+			}
+			break;
+		}
+		case kFloatingPointVariableTypeDouble:
+		{
+			outputDoubleVariables = (double *) outputVariables;
+
+			for (size_t i = 0; i < numberOfOutputDistributions; i++)
+			{
+				fprintf(fp, "%le", outputDoubleVariables[i]);
+				if (i != numberOfOutputDistributions - 1)
+				{
+					fprintf(fp, ", ");
+				}
+			}
+			break;
+		}
+		case kFloatingPointVariableTypeUnknown:
+		default:
+		{
+			fatal("outputVariablesType must be specified");
 		}
 	}
 	fprintf(fp, "\n");
@@ -513,10 +759,10 @@ writeOutputDistributionsToCSV(
 }
 
 void
-printJSONVariables(JSONvariable *  jsonVariables, size_t count, const char *  description)
+printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  description)
 {
 	/*
-	 *	Print json outputs.
+	 *	Print JSON outputs.
 	 */
 	printf("{\n");
 	printf("\t\"description\": \"%s\",\n", description);
@@ -530,7 +776,6 @@ printJSONVariables(JSONvariable *  jsonVariables, size_t count, const char *  de
 		 *	We include this property in the JSON for backwards compatibility.
 		 */
 		printf("\t\t\t\"variableID\": \"%s\",\n", jsonVariables[i].variableSymbol);
-
 		printf("\t\t\t\"variableSymbol\": \"%s\",\n", jsonVariables[i].variableSymbol);
 		printf("\t\t\t\"variableDescription\": \"%s\",\n", jsonVariables[i].variableDescription);
 		printf("\t\t\t\"values\": [\n");
@@ -538,15 +783,31 @@ printJSONVariables(JSONvariable *  jsonVariables, size_t count, const char *  de
 		{
 			switch (jsonVariables[i].type)
 			{
-				case kJSONvariableTypeDouble:
+				case kJSONVariableTypeDouble:
+				{
 					printf("\t\t\t\t\"%f\"", jsonVariables[i].values.asDouble[j]);
 					break;
-				case kJSONvariableTypeFloat:
+				}
+				case kJSONVariableTypeFloat:
+				{
 					printf("\t\t\t\t\"%f\"", jsonVariables[i].values.asFloat[j]);
 					break;
-				case kJSONvariableTypeUnknown:
+				}
+				case kJSONVariableTypeDoubleParticle:
+				{
+					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[i].values.asDouble[j]);
+					break;
+				}
+				case kJSONVariableTypeFloatParticle:
+				{
+					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[i].values.asFloat[j]);
+					break;
+				}
+				case kJSONVariableTypeUnknown:
 				default:
-					fatal("kJSONvariableTypeUnknown must be specified");
+				{
+					fatal("kJSONVariableTypeUnknown must be specified");
+				}
 
 			}
 			if (j < (jsonVariables[i].size - 1))
@@ -565,20 +826,31 @@ printJSONVariables(JSONvariable *  jsonVariables, size_t count, const char *  de
 		{
 			switch (jsonVariables[i].type)
 			{
-				case kJSONvariableTypeDouble:
+				case kJSONVariableTypeDouble:
+				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
 						UxHwDoubleNthMoment(jsonVariables[i].values.asDouble[j], 2));
 					break;
-				case kJSONvariableTypeFloat:
+				}
+				case kJSONVariableTypeFloat:
+				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
 						UxHwFloatNthMoment(jsonVariables[i].values.asFloat[j], 2));
 					break;
-				case kJSONvariableTypeUnknown:
+				}
+				case kJSONVariableTypeFloatParticle:
+				case kJSONVariableTypeDoubleParticle:
+				{
+					printf("\t\t\t\t% " SignaloidParticleModifier "f", 0.0);
+					break;
+				}
+				case kJSONVariableTypeUnknown:
 				default:
+				{
 					fatal("kJSONvariableTypeUnknown must be specified");
-
+				}
 			}
 			if (j < (jsonVariables[i].size - 1))
 			{
@@ -590,6 +862,7 @@ printJSONVariables(JSONvariable *  jsonVariables, size_t count, const char *  de
 			}
 		}
 		printf("\t\t\t]\n");
+
 		printf("\t\t}");
 		if (i < count - 1)
 		{
@@ -614,6 +887,7 @@ setDefaultCommandLineArgumentValues(CommonCommandLineArguments *  arguments)
 							.isTimingEnabled		= false,
 							.numberOfMonteCarloIterations	= 1,
 							.outputSelect			= 0,
+							.isOutputSelected		= false,
 							.isVerbose			= false,
 							.isInputFromFileEnabled		= false,
 							.isOutputJSONMode		= false,
@@ -689,7 +963,7 @@ constructlongOptions(
 	 */
 	assert(optionsOutSize >= 2 * demoOptsSize + 1);
 	assert(demoOptsSize < INT_MAX);
-	
+
 	size_t outIndex = 0;
 
 	/*
@@ -774,7 +1048,7 @@ parseArgsCoreImplementation(
 	 *	At most two longopt's per demo option (opt and optAlternative) plus zero entry.
 	 */
 	longOptionsSize = optionsSize * 2 + 1;
-	longOptions = (struct option*)checkedCalloc(sizeof(struct option), longOptionsSize, __FILE__, __LINE__);
+	longOptions = (struct option *)checkedCalloc(longOptionsSize, sizeof(struct option), __FILE__, __LINE__);
 
 	constructlongOptions(options, optionsSize, longOptions, longOptionsSize);
 
@@ -784,7 +1058,7 @@ parseArgsCoreImplementation(
 	/*
 	 *	From the getopt man page:
 	 *
-	 *	> The variable optind is the index of the next element to be processed in argv. 
+	 *	> The variable optind is the index of the next element to be processed in argv.
 	 *
 	 *	Therefore, we remember the previous value of optind which tells us the index of the
 	 *	_current_ index being processed. This is very useful for error messages.
@@ -802,7 +1076,7 @@ parseArgsCoreImplementation(
 		 *
 		 *	Therefore, specify a single character long opt and this will parse short
 		 *	opts as well! The only catch is that you cannot group short opts: something
-		 *	like `-Wo` must be instead written `-W -o`. I think this is a fine
+		 *	like `-To` must be instead written `-T -o`. I think this is a fine
 		 *	compromise to make.
 		 */
 		modifyNextArgvForNewLibc(argv);
@@ -915,7 +1189,7 @@ concatAndParseArgs(
 	}
 
 	concatOptionsSize = demoSpecificOptionsSize + commonOptionsSize;
-	concatOptions = (DemoOption*)checkedCalloc(sizeof(DemoOption), concatOptionsSize, __FILE__, __LINE__);
+	concatOptions = (DemoOption *)checkedCalloc(concatOptionsSize, sizeof(DemoOption), __FILE__, __LINE__);
 
 	memcpy(
 		concatOptions,
@@ -952,7 +1226,6 @@ parseArgs(
 	DemoOption	commonOptions[] = {
 						{ "input",			"i",	true,	&inputArg,		NULL },
 						{ "output",			"o",	true,	&outputArg,		NULL },
-						{ "write-file",			"W",	false,	NULL,			&arguments->isWriteToFileEnabled },
 						{ "select-output",		"S",	true,	&outputSelectArg,	NULL },
 						{ "time",			"T",	false,	NULL,			&arguments->isTimingEnabled },
 						{ "multiple-executions",	"M",	true,	&multipleExecutionsArg,	NULL },
@@ -985,12 +1258,16 @@ parseArgs(
 
 	if (outputArg != NULL)
 	{
-		int ret = snprintf(arguments->outputFilePath, kCommonConstantMaxCharsPerFilepath, "./sd0/%s", outputArg);
+		int ret = snprintf(arguments->outputFilePath, kCommonConstantMaxCharsPerFilepath, "%s", outputArg);
 
 		if ((ret < 0) || (ret >= kCommonConstantMaxCharsPerFilepath))
 		{
 			fprintf(stderr, "Error: Could not read output file path from command line arguments.\n");
 			return kCommonConstantReturnTypeError;
+		}
+		else
+		{
+			arguments->isWriteToFileEnabled = true;
 		}
 	}
 
@@ -1008,12 +1285,13 @@ parseArgs(
 		else if (outputSelect < 0)
 		{
 			fprintf(stderr, "Error: The output selected must be non-negative.\n");
-	
+
 			return kCommonConstantReturnTypeError;
 		}
 		else
 		{
 			arguments->outputSelect = outputSelect;
+			arguments->isOutputSelected = true;
 		}
 	}
 
@@ -1031,7 +1309,7 @@ parseArgs(
 		else if (multipleExecutions <= 0)
 		{
 			fprintf(stderr, "Error: The number of multiple executions must be positive.\n");
-	
+
 			return kCommonConstantReturnTypeError;
 		}
 		else
@@ -1042,6 +1320,16 @@ parseArgs(
 			arguments->isTimingEnabled = true;
 			arguments->isSingleShotExecution = false;
 		}
+	}
+
+	/*
+	 *	JSON output mode and benchmarking mode are not compatible.
+	 */
+	if ((arguments->isOutputJSONMode) && (arguments->isBenchmarkingMode))
+	{
+		fprintf(stderr, "Error: Output JSON mode and benchmarking mode are not compatible. Please choose only one.\n");
+
+		return kCommonConstantReturnTypeError;
 	}
 
 	return kCommonConstantReturnTypeSuccess;
@@ -1055,42 +1343,70 @@ printCommonUsage(void)
 		stderr,
 		"\t[-i, --input <Path to input CSV file : str>] (Read inputs from file.)\n"
 		"\t[-o, --output <Path to output CSV file : str>] (Specify the output file.)\n"
-		"\t[-W, --write-file] (Writes the output to the output file. Use '-o' specify this file path.)\n"
 		"\t[-S, --select-output <output : int>] (Compute 0-indexed output, by default 0.)\n"
 		"\t[-M, --multiple-executions <Number of executions : int (Default: 1)>] (Repeated execute kernel for benchmarking.)\n"
 		"\t[-T, --time] (Timing mode: Times and prints the timing of the kernel execution.)\n"
 		"\t[-v, --verbose] (Verbose mode: Prints extra information about demo execution.)\n"
 		"\t[-b, --benchmarking] (Benchmarking mode: Generate outputs in format for benchmarking.)\n"
-		"\t[-j, --json] (Print output in json format.)\n"
+		"\t[-j, --json] (Print output in JSON format.)\n"
 		"\t[-h, --help] (Display this help message.)\n");
 }
 
 MeanAndVariance
-calculateMeanAndVariance(const double *  data, size_t n)
+calculateMeanAndVarianceOfFloatSamples(
+	const float *	dataArray,
+	size_t		dataArraySize)
+{
+	float	mean;
+	float	variance;
+	float	sum = 0;
+	float	sumOfSquares = 0;
+
+	for (size_t i = 0; i < dataArraySize; i++)
+	{
+		sum += dataArray[i];
+		sumOfSquares += dataArray[i] * dataArray[i];
+	}
+
+	mean = sum / dataArraySize;
+	variance = sumOfSquares / dataArraySize - (mean * mean);
+
+	return (MeanAndVariance)
+	{
+		.mean = (double)mean,
+		.variance = (double)variance,
+	};
+}
+
+MeanAndVariance
+calculateMeanAndVarianceOfDoubleSamples(
+	const double *	dataArray,
+	size_t		dataArraySize)
 {
 	double	mean;
 	double	variance;
 	double	sum = 0;
 	double	sumOfSquares = 0;
 
-	for (size_t i = 0; i < n; i++)
+	for (size_t i = 0; i < dataArraySize; i++)
 	{
-		sum += data[i];
-		sumOfSquares += data[i] * data[i];
+		sum += dataArray[i];
+		sumOfSquares += dataArray[i] * dataArray[i];
 	}
 
-	mean = sum / n;
-	variance = sumOfSquares / n - (mean * mean);
+	mean = sum / dataArraySize;
+	variance = sumOfSquares / dataArraySize - (mean * mean);
 
-	return (MeanAndVariance) {
+	return (MeanAndVariance)
+	{
 		.mean = mean,
 		.variance = variance,
 	};
 }
 
 void
-saveMonteCarloDataToDataDotOutFile(
-	const double *	benchmarkingDataSamples,
+saveMonteCarloFloatDataToDataDotOutFile(
+	const float *	benchmarkingDataSamples,
 	uint64_t	cpuTimeElapsedMicroSeconds,
 	size_t		numberOfMonteCarloIterations)
 {
@@ -1110,6 +1426,28 @@ saveMonteCarloDataToDataDotOutFile(
 	fclose(fp);
 }
 
+void
+saveMonteCarloDoubleDataToDataDotOutFile(
+	const double *	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfMonteCarloIterations)
+{
+	FILE *	fp = fopen("data.out", "w");
+	if (fp == NULL)
+	{
+		fatal("Could not open monte carlo output file");
+	}
+
+	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
+
+	for (size_t i = 0; i < numberOfMonteCarloIterations; i++)
+	{
+		fprintf(fp, "%.20lf\n", benchmarkingDataSamples[i]);
+	}
+
+	fclose(fp);
+}
+
 void *
 checkedMalloc(size_t size, const char *  file, int line)
 {
@@ -1123,12 +1461,12 @@ checkedMalloc(size_t size, const char *  file, int line)
 }
 
 void *
-checkedCalloc(size_t num, size_t size, const char *  file, int line)
+checkedCalloc(size_t count, size_t size, const char *  file, int line)
 {
-	void *	ret = calloc(num, size);
+	void *	ret = calloc(count, size);
 	if (ret == NULL)
 	{
-		fatal("calloc() failed to allocate %zu bytes at %s:%d", size, file, line);
+		fatal("calloc() failed to allocate %zu bytes at %s:%d", count * size, file, line);
 	}
 
 	return ret;

@@ -42,8 +42,8 @@ typedef enum
 	kCommonConstantMaxCharsPerFilepath			= 1024,
 	kCommonConstantMaxCharsPerLine				= 1024 * 1024,
 	kCommonConstantMaxNumberOfInputSamples			= 10000,
-	kCommonConstantMaxCharsPerJsonVariableId		= 256,
-	kCommonConstantMaxCharsPerJsonVariableDescription	= 1024,
+	kCommonConstantMaxCharsPerJSONVariableSymbol		= 256,
+	kCommonConstantMaxCharsPerJSONVariableDescription	= 1024,
 } CommonConstant;
 
 typedef enum
@@ -54,25 +54,34 @@ typedef enum
 
 typedef enum
 {
-	kJSONvariableTypeUnknown,
-	kJSONvariableTypeFloat,
-	kJSONvariableTypeDouble,
-} JSONvariableType;
+	kFloatingPointVariableTypeUnknown,
+	kFloatingPointVariableTypeFloat,
+	kFloatingPointVariableTypeDouble,
+} FloatingPointVariableType;
+
+typedef enum
+{
+	kJSONVariableTypeUnknown,
+	kJSONVariableTypeFloat,
+	kJSONVariableTypeDouble,
+	kJSONVariableTypeFloatParticle,
+	kJSONVariableTypeDoubleParticle,
+} JSONVariableType;
 
 typedef union
 {
 	const double *		asDouble;
 	const float *		asFloat;
-} JSONvariablePointer;
+} JSONVariablePointer;
 
-typedef struct JSONvariable
+typedef struct JSONVariable
 {
-	char			variableSymbol[kCommonConstantMaxCharsPerJsonVariableId];
-	char			variableDescription[kCommonConstantMaxCharsPerJsonVariableDescription];
-	JSONvariablePointer	values;
-	JSONvariableType	type;
+	char			variableSymbol[kCommonConstantMaxCharsPerJSONVariableSymbol];
+	char			variableDescription[kCommonConstantMaxCharsPerJSONVariableDescription];
+	JSONVariablePointer	values;
+	JSONVariableType	type;
 	size_t			size;
-} JSONvariable;
+} JSONVariable;
 
 /**
  *	@brief	Prevent compiler optimising away an otherwise unused value.
@@ -80,7 +89,8 @@ typedef struct JSONvariable
  *
  *	@param	ptr	Pointer to value to force compiler to keep. Must not be `NULL`.
  */
-void	doNotOptimize(void *  ptr);
+void
+doNotOptimize(void *  ptr);
 
 
 /**
@@ -94,46 +104,81 @@ void	fatal(const char *fmt, ...)
 	__attribute__ ((format (printf, 1, 2)));
 
 /**
- *	@brief	Read data from a CSV file. Data entries are wither numbers or Ux-values.
+ *	@brief	Read single-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
  *
  *	@param	inputFilePath		path to CSV file to read from
- *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
  *	@param	expectedHeaders		array of headers that should be in the CSV data
+ *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
  *	@param	numberOfDistributions	size of `inputDistributions` _and_ `expectedHeaders` arrays
  *	@return				`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-CommonConstantReturnType	readInputDistributionsFromCSV(
-								const char *		inputFilePath,
-								double *		inputDistributions,
-								const char * const *	expectedHeaders,
-								size_t			numberOfDistributions);
+CommonConstantReturnType
+readInputFloatDistributionsFromCSV(
+	const char *		inputFilePath,
+	const char * const *	expectedHeaders,
+	float *			inputDistributions,
+	size_t			numberOfDistributions);
 
 /**
- *	@brief	Write Ux-valued data to a CSV file.
+ *	@brief	Read double-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
+ *
+ *	@param	inputFilePath		path to CSV file to read from
+ *	@param	expectedHeaders		array of headers that should be in the CSV data
+ *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
+ *	@param	numberOfDistributions	size of `inputDistributions` _and_ `expectedHeaders` arrays
+ *	@return				`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
+ */
+CommonConstantReturnType
+readInputDoubleDistributionsFromCSV(
+	const char *		inputFilePath,
+	const char * const *	expectedHeaders,
+	double *		inputDistributions,
+	size_t			numberOfDistributions);
+
+/**
+ *	@brief	Write Ux-valued data of single-precision floating-point variables to a CSV file.
  *
  *	@param	outputFilePath			path prefix for the output CSV file to write to
  *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
- *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
  *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
+ *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
  *	@return					`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-CommonConstantReturnType	writeOutputDistributionsToCSV(
-								const char *		outputFilePath,
-								const double *		outputVariables,
-								const char * const *	outputVariableNames,
-								size_t			numberOfOutputDistributions);
+CommonConstantReturnType
+writeOutputFloatDistributionsToCSV(
+	const char *		outputFilePath,
+	const float *		outputVariables,
+	const char * const *	outputVariableNames,
+	size_t			numberOfOutputDistributions);
 
 /**
- *	@brief	Print Ux-valued data to `stdout` in json format.
+ *	@brief	Write Ux-valued data of double-precision floating-point variables to a CSV file.
  *
- *	@param	jsonVariables	array of JSONvariable items
- *	@param	count		number of JSONvariable items
- *	@param	description	json description
+ *	@param	outputFilePath			path prefix for the output CSV file to write to
+ *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
+ *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
+ *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
+ *	@return					`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-void	printJSONVariables(
-				JSONvariable *	jsonVariables,
-				size_t		count,
-				const char *	description);
+CommonConstantReturnType
+writeOutputDoubleDistributionsToCSV(
+	const char *		outputFilePath,
+	const double *		outputVariables,
+	const char * const *	outputVariableNames,
+	size_t			numberOfOutputDistributions);
+
+/**
+ *	@brief	Print Ux-valued data to `stdout` in JSON format.
+ *
+ *	@param	jsonVariables	array of JSONVariable items
+ *	@param	count		number of JSONVariable items
+ *	@param	description	JSON description
+ */
+void
+printJSONVariables(
+	JSONVariable *	jsonVariables,
+	size_t		count,
+	const char *	description);
 
 /**
  *	@brief	Parse an integer at the start of `str`, trailing characters are ignored.
@@ -142,17 +187,34 @@ void	printJSONVariables(
  *	@param	out	Will be set to parsed value
  *	@return 	`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-CommonConstantReturnType	parseIntChecked(const char *  str, int *  out);
-
+CommonConstantReturnType
+parseIntChecked(
+	const char *	str,
+	int *		out);
 
 /**
- *	@brief	Parse a floating point value at the start of `str`, trailing characters are ignored.
+ *	@brief	Parse a single-precision floating-point value at the start of `str`, trailing characters are ignored.
  *
  *	@param	str	String to parse
  *	@param	out	Will be set to parsed value
  *	@return 	`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-CommonConstantReturnType	parseDoubleChecked(const char *  str, double *  out);
+CommonConstantReturnType
+parseFloatChecked(
+	const char *	str,
+	float *		out);
+
+/**
+ *	@brief	Parse a double-precision floating-pointvalue at the start of `str`, trailing characters are ignored.
+ *
+ *	@param	str	String to parse
+ *	@param	out	Will be set to parsed value
+ *	@return 	`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
+ */
+CommonConstantReturnType
+parseDoubleChecked(
+	const char *	str,
+	double *	out);
 
 typedef struct
 {
@@ -162,6 +224,7 @@ typedef struct
 	bool	isTimingEnabled;
 	size_t	numberOfMonteCarloIterations;
 	size_t	outputSelect;
+	bool	isOutputSelected;
 	bool	isVerbose;
 	bool	isInputFromFileEnabled;
 	bool	isOutputJSONMode;
@@ -220,16 +283,18 @@ typedef struct
  *	@param	demoSpecificOptions	Extra command line arguments to parse
  *	@return 			`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
-CommonConstantReturnType	parseArgs(
-						int				argc,
-						char *  const			argv[],
-						CommonCommandLineArguments *	arguments,
-						DemoOption *			demoSpecificOptions);
+CommonConstantReturnType
+parseArgs(
+	int				argc,
+	char *  const			argv[],
+	CommonCommandLineArguments *	arguments,
+	DemoOption *			demoSpecificOptions);
 
 /**
  *	@brief	Print the common part of the usage to stdout.
  */
-void	printCommonUsage(void);
+void
+printCommonUsage(void);
 
 typedef struct
 {
@@ -237,30 +302,57 @@ typedef struct
 	double	variance;
 } MeanAndVariance;
 
-
 /**
- *	@brief	Caluculate mean and variance of data.
+ *	@brief	Caluculate mean and variance of float data.
  *
  *	@param	dataArray	data array for which to compute mean and variance
  *	@param	dataArraySize	number of items in `dataArray`
- *	@return			calculated values
+ *	@return			calculated mean and variance
  */
-MeanAndVariance	calculateMeanAndVariance(const double *  dataArray, size_t dataArraySize);
-
+MeanAndVariance
+calculateMeanAndVarianceOfFloatSamples(
+	const float *	dataArray,
+	size_t		dataArraySize);
 
 /**
- *	@brief	Writes montecarlo samples to a file 'data.out'
+ *	@brief	Caluculate mean and variance of double data.
  *
- *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of monte carlo samples
+ *	@param	dataArray	data array for which to compute mean and variance
+ *	@param	dataArraySize	number of items in `dataArray`
+ *	@return			calculated mean and variance
+ */
+MeanAndVariance
+calculateMeanAndVarianceOfDoubleSamples(
+	const double *	dataArray,
+	size_t		dataArraySize);
+
+/**
+ *	@brief	Writes Monte Carlo samples to a file 'data.out'
+ *
+ *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of float Monte Carlo samples
  *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
  *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
  *	@return	void
  */
-void	saveMonteCarloDataToDataDotOutFile(
-						const double *	benchmarkingDataSamples,
-						uint64_t	cpuTimeElapsedMicroSeconds,
-						size_t		numberOfMonteCarloIterations);
+void
+saveMonteCarloFloatDataToDataDotOutFile(
+	const float *	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfMonteCarloIterations);
 
+/**
+ *	@brief	Writes Monte Carlo samples to a file 'data.out'
+ *
+ *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of double Monte Carlo samples
+ *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
+ *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
+ *	@return	void
+ */
+void
+saveMonteCarloDoubleDataToDataDotOutFile(
+	const double *	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfMonteCarloIterations);
 
 /**
  *	@brief	Call Malloc and abort on allocation failure.
@@ -270,7 +362,11 @@ void	saveMonteCarloDataToDataDotOutFile(
  *	@param	line	Line number to include in error message
  *	@return		Pointer as returned by malloc
  */
-void *	checkedMalloc(size_t size, const char *  file, int line);
+void *
+checkedMalloc(
+	size_t		size,
+	const char *	file,
+	int		line);
 
 /**
  *	@brief	Call Calloc and abort on allocation failure.
@@ -281,9 +377,13 @@ void *	checkedMalloc(size_t size, const char *  file, int line);
  *	@param	line	Line number to include in error message
  *	@return		Pointer as returned by calloc
  */
-void *	checkedCalloc(size_t num, size_t size, const char *  file, int line);
+void *
+checkedCalloc(
+	size_t		num,
+	size_t		size,
+	const char *	file,
+	int		line);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
