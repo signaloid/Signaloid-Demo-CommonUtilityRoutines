@@ -1247,7 +1247,7 @@ parseArgs(
 
 		if ((ret < 0) || (ret >= kCommonConstantMaxCharsPerFilepath))
 		{
-			fprintf(stderr, "Error: Could not read input file path from command line arguments.\n");
+			fprintf(stderr, "Error: Could not read input file path from command-line arguments.\n");
 			return kCommonConstantReturnTypeError;
 		}
 		else
@@ -1262,7 +1262,7 @@ parseArgs(
 
 		if ((ret < 0) || (ret >= kCommonConstantMaxCharsPerFilepath))
 		{
-			fprintf(stderr, "Error: Could not read output file path from command line arguments.\n");
+			fprintf(stderr, "Error: Could not read output file path from command-line arguments.\n");
 			return kCommonConstantReturnTypeError;
 		}
 		else

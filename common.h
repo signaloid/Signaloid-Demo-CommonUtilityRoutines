@@ -237,12 +237,12 @@ typedef struct
 typedef struct
 {
 	/**
-	 *	@brief The command line flag (without leading `-` or `--`) for this option.
+	 *	@brief The command-line flag (without leading `-` or `--`) for this option.
 	 */
 	const char *	opt;
 
 	/**
-	 *	@brief An alternative command line flag (without leading `-` or `--`) for this option.
+	 *	@brief An alternative command-line flag (without leading `-` or `--`) for this option.
 	 *
 	 *	@details Often used for short options.
 	 */
@@ -251,7 +251,7 @@ typedef struct
 	/**
 	 *	@brief Whether this option takes an argument.
 	 *
-	 *	@details If set, then parsing will fail unless the command line flag has an
+	 *	@details If set, then parsing will fail unless the command-line flag has an
 	 *	argument.
 	 */
 	bool		hasArg;
@@ -273,14 +273,14 @@ typedef struct
 } DemoOption;
 
 /**
- *	@brief	Parse command line arguments into `args`.
+ *	@brief	Parse command-line arguments into `args`.
  *
  * 	@details Grouped short options are not supported. (Use `-W -j` rather than `-Wj`.)
  *
  *	@param	argc			As provided to `main()`
  *	@param	argv			As provided to `main()`
- *	@param	args			Parsed command line arguments are stored here
- *	@param	demoSpecificOptions	Extra command line arguments to parse
+ *	@param	args			Parsed command-line arguments are stored here
+ *	@param	demoSpecificOptions	Extra command-line arguments to parse
  *	@return 			`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
 CommonConstantReturnType
