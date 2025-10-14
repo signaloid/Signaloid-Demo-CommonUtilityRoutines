@@ -1404,6 +1404,150 @@ calculateMeanAndVarianceOfDoubleSamples(
 	};
 }
 
+static int
+compareFloats(const void *a, const void *b)
+{
+	float diff = *(const float*)a - *(const float*)b;
+
+	return ((int) (diff > 0)) - ((int) (diff < 0));
+}
+
+static int
+compareDoubles(const void *a, const void *b)
+{
+	double diff = *(const double*)a - *(const double*)b;
+
+	return ((int) (diff > 0)) - ((int) (diff < 0));
+}
+
+float
+calculatePercentageQuantileOfFloatSamples(
+	const float *	dataArray,
+	float		quantilePercentage,
+	size_t		dataArraySize)
+{
+	int index;
+	float quantile;
+
+	/*
+	 *	Make a copy for sorting.
+	 */ 
+	float *	dataArrayCopy = (float *)checkedMalloc(
+				dataArraySize * sizeof(float),
+				__FILE__,
+				__LINE__);
+
+	memcpy(dataArrayCopy, dataArray, dataArraySize * sizeof(float));
+
+	/*
+	 *	Sort samples (modifies original array).
+	 */ 
+	qsort(dataArrayCopy, dataArraySize, sizeof(float), compareFloats);
+
+	/*
+	 *	Determine the relevant index.
+	 */
+	index = (int)(quantilePercentage * dataArraySize);
+
+	/*
+	 *	Return the value at that index.
+	 */
+	quantile = dataArrayCopy[index];
+	free(dataArrayCopy);
+
+	return quantile;
+}
+
+double
+calculatePercentageQuantileOfDoubleSamples(
+	const double *	dataArray,
+	double		quantilePercentage,
+	size_t		dataArraySize)
+{
+	int 	index;
+	double 	quantile;
+
+	/*
+	 *	Make a copy for sorting.
+	 */ 
+	double * dataArrayCopy = (double *)checkedMalloc(
+			dataArraySize * sizeof(double),
+			__FILE__,
+			__LINE__);
+
+	memcpy(dataArrayCopy, dataArray, dataArraySize * sizeof(double));
+
+	/*
+	 *	Sort samples (modifies original array).
+	 */ 
+	qsort(dataArrayCopy, dataArraySize, sizeof(double), compareDoubles);
+
+	/*
+	 *	Determine the relevant index.
+	 */
+	index = (int)(quantilePercentage * dataArraySize);
+
+	/*
+	 *	Return the value at that index.
+	 */
+	quantile = dataArrayCopy[index];
+	free(dataArrayCopy);
+
+	return quantile;
+}
+
+void
+calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
+	float **	dataArray,
+	size_t		dataArrayRows,
+	size_t		dataArrayColumns,
+	float *		meanValueArray,
+	float *		varianceArray)
+{
+	for (size_t j = 0; j < dataArrayColumns; j++)
+	{
+		float		sum = 0;
+		float		sumOfSquares = 0;
+		float 		meanValue;
+
+		for (size_t i = 0; i < dataArrayRows; i++)
+		{
+			sum += dataArray[i][j];
+			sumOfSquares += dataArray[i][j] * dataArray[i][j];
+		}
+
+		meanValue = sum / dataArrayRows;
+		meanValueArray[j] = meanValue;
+		varianceArray[j] = sumOfSquares / dataArrayRows - (meanValue * meanValue);
+	}
+}
+
+void
+calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
+	double **	dataArray,
+	size_t		dataArrayRows,
+	size_t		dataArrayColumns,
+	double *	meanValueArray,
+	double *	varianceArray)
+{
+	for (size_t j = 0; j < dataArrayColumns; j++)
+	{
+		double		sum = 0;
+		double		sumOfSquares = 0;
+
+		for (size_t i = 0; i < dataArrayRows; i++)
+		{
+			sum += dataArray[i][j];
+			sumOfSquares += dataArray[i][j] * dataArray[i][j];
+		}
+
+		meanValueArray[j] = sum / dataArrayRows;
+		varianceArray[j] = sumOfSquares / dataArrayRows - (meanValueArray[j] * meanValueArray[j]);
+	}
+}
+
+
+
 void
 saveMonteCarloFloatDataToDataDotOutFile(
 	const float *	benchmarkingDataSamples,
@@ -1427,6 +1571,44 @@ saveMonteCarloFloatDataToDataDotOutFile(
 }
 
 void
+saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
+	float **	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfOutputVariables,
+	size_t		numberOfMonteCarloIterations)
+{
+	FILE *	fp = fopen("data.out", "w");
+	if (fp == NULL)
+	{
+		fatal("Could not open monte carlo output file");
+	}
+
+	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
+
+	for (size_t j = 0; j < numberOfMonteCarloIterations; j++)
+	{
+		for (size_t i = 0; i < numberOfOutputVariables; i++)
+		{
+			fprintf(fp, "%.20f", benchmarkingDataSamples[i][j]);
+			/*
+			 *	Print a comma after each output variable sample.
+			 *	Print a newline after printing the final output variable.
+			 */
+			if (i < numberOfOutputVariables - 1)
+			{
+				fprintf(fp, ", ");
+			}
+			else
+			{
+				fprintf(fp, "\n");
+			}
+		}
+	}
+
+	fclose(fp);
+}
+
+void
 saveMonteCarloDoubleDataToDataDotOutFile(
 	const double *	benchmarkingDataSamples,
 	uint64_t	cpuTimeElapsedMicroSeconds,
@@ -1443,6 +1625,44 @@ saveMonteCarloDoubleDataToDataDotOutFile(
 	for (size_t i = 0; i < numberOfMonteCarloIterations; i++)
 	{
 		fprintf(fp, "%.20lf\n", benchmarkingDataSamples[i]);
+	}
+
+	fclose(fp);
+}
+
+void
+saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
+	double **	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfOutputVariables,
+	size_t		numberOfMonteCarloIterations)
+{
+	FILE *	fp = fopen("data.out", "w");
+	if (fp == NULL)
+	{
+		fatal("Could not open monte carlo output file");
+	}
+
+	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
+
+	for (size_t j = 0; j < numberOfMonteCarloIterations; j++)
+	{
+		for (size_t i = 0; i < numberOfOutputVariables; i++)
+		{
+			fprintf(fp, "%.20f", benchmarkingDataSamples[i][j]);
+			/*
+			 *	Print a comma after each output variable sample.
+			 *	Print a newline after printing the final output variable.
+			 */
+			if (i < numberOfOutputVariables - 1)
+			{
+				fprintf(fp, ", ");
+			}
+			else
+			{
+				fprintf(fp, "\n");
+			}
+		}
 	}
 
 	fclose(fp);
