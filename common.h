@@ -327,6 +327,68 @@ calculateMeanAndVarianceOfDoubleSamples(
 	size_t		dataArraySize);
 
 /**
+ *	@brief  Caluclate the `quantilePercentage` quantile of a set of `float` samples.
+ *
+ *	@param  dataArray		Data array for which to compute the quantile
+ *	@param  quantilePercentage	The alpha value for which to take the quantile
+ *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
+ */	
+float
+calculatePercentageQuantileOfFloatSamples(
+		const float *	dataArray,
+		float		quantilePercentage,
+		size_t		dataArraySize);
+
+/**
+ *	@brief  Caluclate the `quantilePercentage` quantile of a set of `double` samples.
+ *
+ *	@param  dataArray		Data array for which to compute the quantile
+ *	@param  quantilePercentage	The alpha value for which to take the quantile
+ *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
+ */	
+double	
+calculatePercentageQuantileOfDoubleSamples(
+		const double *	dataArray,
+		double		quantilePercentage,
+		size_t		dataArraySize);
+
+/**
+ *	@brief  Caluculate mean and variance of multidimensional float data.
+ *
+ *	@param  dataArray		Multidimensional data array for which to compute mean and variance
+ *	@param  dataArrayRows		number of rows in `dataArray`(Number of MC samples typically)
+ *	@param  dataArrayColumns	number of columns in `dataArray`(Number of state variables typically)
+ *	@param  meanValueArray		Array allocated with size `dataArrayColumns` to carry the resulting mean values
+ *	@param  varianceArray		Array allocated with size `dataArrayColumns` to carry the resulting variance values
+ */
+void
+calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
+	float **	dataArray,
+	size_t		dataArrayRows,
+	size_t		dataArrayColumns,
+	float *		meanValueArray,
+	float *		varianceArray);
+
+/**
+ *	@brief  Caluculate mean and variance of multidimensional double data.
+ *
+ *	@param  dataArray		Multidimensional data array for which to compute mean and variance
+ *	@param  dataArrayRows		number of rows in `dataArray`(Number of MC samples typically)
+ *	@param  dataArrayColumns	number of columns in `dataArray`(Number of state variables typically)
+ *	@param  meanValueArray		Array allocated with size `dataArrayColumns` to carry the resulting mean values
+ *	@param  varianceArray		Array allocated with size `dataArrayColumns` to carry the resulting variance values
+ */
+void
+calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
+	double **	dataArray,
+	size_t		dataArrayRows,
+	size_t		dataArrayColumns,
+	double *	meanValueArray,
+	double *	varianceArray);
+
+
+
+/**
  *	@brief	Writes Monte Carlo samples to a file 'data.out'
  *
  *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of float Monte Carlo samples
@@ -341,6 +403,23 @@ saveMonteCarloFloatDataToDataDotOutFile(
 	size_t		numberOfMonteCarloIterations);
 
 /**
+ *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
+ *		Each line contains a sample for each variable. Samples are comma-separated.
+ *
+ *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of float Monte Carlo samples
+ *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
+ *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains `numberOfOutputVariables` comma-separated samples.
+ *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
+ *	@return	void
+ */
+void
+saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
+	float **	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfOutputVariables,
+	size_t		numberOfMonteCarloIterations);
+
+/**
  *	@brief	Writes Monte Carlo samples to a file 'data.out'
  *
  *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of double Monte Carlo samples
@@ -352,6 +431,23 @@ void
 saveMonteCarloDoubleDataToDataDotOutFile(
 	const double *	benchmarkingDataSamples,
 	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfMonteCarloIterations);
+
+/**
+ *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
+ *		Each line contains a sample for each variable. Samples are comma-separated.
+ *
+ *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of double Monte Carlo samples
+ *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
+ *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains `numberOfOutputVariables` comma-separated samples
+ *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
+ *	@return	void
+ */
+void
+saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
+	double **	benchmarkingDataSamples,
+	uint64_t	cpuTimeElapsedMicroSeconds,
+	size_t		numberOfOutputVariables,
 	size_t		numberOfMonteCarloIterations);
 
 /**
