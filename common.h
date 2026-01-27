@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2023, Signaloid.
+ *	Copyright (c) 2023-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -483,3 +483,40 @@ checkedCalloc(
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+
+/**
+ *	@brief	Populates a JSONVariable struct with values for JSON output.
+ *
+ *	@param	jsonVariable			Pointer to the JSONVariable struct to populate.
+ *	@param	outputVariableValues		Array of values for the output variable.
+ *	@param	outputVariableDescription	Description string for the variable.
+ *	@param	outputSelect			Index of the output variable.
+ *	@param	numberOfOutputVariableValues	Number of values in outputVariableValues.
+ */
+void
+populateJSONVariableStruct(
+	JSONVariable *	jsonVariable,
+	double *	outputVariableValues,
+	const char *	outputVariableDescription,
+	size_t		outputSelect,
+	size_t		numberOfOutputVariableValues);
+
+/**
+ *	@brief	Prints output distributions in JSON format based on command-line arguments.
+ *		Will either print a single value or all values based on outputSelect.
+ *
+ *	@param	arguments			Common command-line arguments.
+ *	@param	monteCarloOutputSamples		Array of Monte Carlo output samples.
+ *	@param	outputVariables			Array of output variable distributions.
+ *	@param	outputVariableDescriptions	Array of description strings for each output.
+ *	@param	numberOfOutputVariables		Maximum number of output variables.
+ *	@param	description			Description string for the JSON output.
+ */
+void
+printJSONFormattedOutput(
+	CommonCommandLineArguments *	arguments,
+	double *			monteCarloOutputSamples,
+	double *			outputVariables,
+	const char **			outputVariableDescriptions,
+	size_t				numberOfOutputVariables,
+	const char *			description);
