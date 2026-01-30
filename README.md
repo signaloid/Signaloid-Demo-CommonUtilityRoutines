@@ -61,7 +61,8 @@ Parses both common and application-specific command-line options.
 ```c
 #include "common.h"
 
-int main (int argc, char *  argv[])
+int 
+main (int argc, char *  argv[])
 {
         CommonCommandLineArguments args;
 
@@ -69,7 +70,7 @@ int main (int argc, char *  argv[])
          *      Define demo specific options
          */
         DemoOption myOptions[] = {
-                { "custom-flag", "c", true, &customArg, &foundCustom },
+                { .opt = "custom-flag", .optAlternative = "c", true, &customArg, &foundCustom },
                 { ZERO_STRUCT_INIT }  /* Terminator */
         };
 
@@ -312,9 +313,10 @@ All functions return `CommonConstantReturnType`:
 - `kCommonConstantReturnTypeError` (1) - Operation failed
 
 The library uses `fatal()` for unrecoverable errors and prints descriptive error messages to `stderr` for recoverable issues.
-# Examples usage
 
-## JSON printing usage
+## Examples usage
+
+### JSON printing usage
 ```c
 #include "common.h"
 /*
