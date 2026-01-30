@@ -830,14 +830,14 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
-						UxHwDoubleNthMoment(jsonVariables[ii].values.asDouble[jj], 2));
+						sqrt(UxHwDoubleNthMoment(jsonVariables[ii].values.asDouble[jj], 2)));
 					break;
 				}
 				case kJSONVariableTypeFloat:
 				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
-						UxHwFloatNthMoment(jsonVariables[ii].values.asFloat[jj], 2));
+						sqrt(UxHwFloatNthMoment(jsonVariables[ii].values.asFloat[jj], 2)));
 					break;
 				}
 				case kJSONVariableTypeFloatParticle:
