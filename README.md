@@ -327,7 +327,9 @@ typedef enum
 
 static const double kDefaultMean        = 0.0;
 static const double kDefaultVariance    = 1.0;
-int main(int argc, char *  argv[])
+
+int
+main(int argc, char *  argv[])
 {
         JSONVariable jsonVariable;
         double gaussOutput = UxHwDoubleGaussDist(kDefaultMean, kDefaultVariance);
@@ -382,7 +384,8 @@ This outputs
 ```c
 #include "common.h"
 
-int main(int argc, char *  argv[]) {
+int
+main(int argc, char *  argv[]) {
         CommonCommandLineArguments args;
 
         /* 
