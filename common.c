@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2023, Signaloid.
+ *	Copyright (c) 2023-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -266,12 +266,12 @@ validateInputDistributionCSVHeader(
 			size_t	tokenLength = strlen(token);
 			size_t	tokenSuffixIndex = expectedHeaderLength;
 
-			for (size_t i = tokenSuffixIndex; i < tokenLength; ++i)
+			for (size_t ii = tokenSuffixIndex; ii < tokenLength; ++ii)
 			{
 				/*
 				 *	Check that this suffix character is whitespace.
 				 */
-				if (!safeIsspace(token[i]))
+				if (!safeIsspace(token[ii]))
 				{
 					fprintf(
 						stderr,
@@ -369,9 +369,9 @@ readInputDistributionsFromCSV(
 			inputFloatDistributions = (float *) inputDistributions;
 
 			inputFloatSampleValues = (float **)checkedCalloc(numberOfDistributions, sizeof(double *), __FILE__, __LINE__);
-			for (size_t i = 0; i < numberOfDistributions; i++)
+			for (size_t ii = 0; ii < numberOfDistributions; ii++)
 			{
-				inputFloatSampleValues[i] = (float *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(float), __FILE__, __LINE__);
+				inputFloatSampleValues[ii] = (float *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(float), __FILE__, __LINE__);
 			}
 			break;
 		}
@@ -380,9 +380,9 @@ readInputDistributionsFromCSV(
 			inputDoubleDistributions = (double *) inputDistributions;
 
 			inputDoubleSampleValues = (double **)checkedCalloc(numberOfDistributions, sizeof(double *), __FILE__, __LINE__);
-			for (size_t i = 0; i < numberOfDistributions; i++)
+			for (size_t ii = 0; ii < numberOfDistributions; ii++)
 			{
-				inputDoubleSampleValues[i] = (double *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(double), __FILE__, __LINE__);
+				inputDoubleSampleValues[ii] = (double *)checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(double), __FILE__, __LINE__);
 			}
 			break;
 		}
@@ -491,14 +491,14 @@ readInputDistributionsFromCSV(
 
 				if (token[0] == '-')
 				{
-					for (size_t i = 1; true; i++)
+					for (size_t ii = 1; true; ii++)
 					{
-						if (token[i] == '\0')
+						if (token[ii] == '\0')
 						{
 							shouldIgnore = true;
 							break;
 						}
-						if (!safeIsspace(token[i]))
+						if (!safeIsspace(token[ii]))
 						{
 							break;
 						}
@@ -586,29 +586,29 @@ readInputDistributionsFromCSV(
 	 */
 	if (inputDistributionsType == kFloatingPointVariableTypeFloat)
 	{
-		for (size_t i = 0; i < numberOfDistributions; i++)
+		for (size_t ii = 0; ii < numberOfDistributions; ii++)
 		{
-			if (uxColumns[i])
+			if (uxColumns[ii])
 			{
-				inputFloatDistributions[i] = inputFloatSampleValues[i][0];
+				inputFloatDistributions[ii] = inputFloatSampleValues[ii][0];
 			}
 			else
 			{
-				inputFloatDistributions[i] = UxHwFloatDistFromSamples(inputFloatSampleValues[i], sampleCounts[i]);
+				inputFloatDistributions[ii] = UxHwFloatDistFromSamples(inputFloatSampleValues[ii], sampleCounts[ii]);
 			}
 		}
 	}
 	else
 	{
-		for (size_t i = 0; i < numberOfDistributions; i++)
+		for (size_t ii = 0; ii < numberOfDistributions; ii++)
 		{
-			if (uxColumns[i])
+			if (uxColumns[ii])
 			{
-				inputDoubleDistributions[i] = inputDoubleSampleValues[i][0];
+				inputDoubleDistributions[ii] = inputDoubleSampleValues[ii][0];
 			}
 			else
 			{
-				inputDoubleDistributions[i] = UxHwDoubleDistFromSamples(inputDoubleSampleValues[i], sampleCounts[i]);
+				inputDoubleDistributions[ii] = UxHwDoubleDistFromSamples(inputDoubleSampleValues[ii], sampleCounts[ii]);
 			}
 		}
 	}
@@ -621,9 +621,9 @@ cleanup:
 
 	if (inputFloatSampleValues != NULL)
 	{
-		for (size_t i = 0; i < numberOfDistributions; i++)
+		for (size_t ii = 0; ii < numberOfDistributions; ii++)
 		{
-			free(inputFloatSampleValues[i]);
+			free(inputFloatSampleValues[ii]);
 		}
 
 		free(inputFloatSampleValues);
@@ -631,9 +631,9 @@ cleanup:
 
 	if (inputDoubleSampleValues != NULL)
 	{
-		for (size_t i = 0; i < numberOfDistributions; i++)
+		for (size_t ii = 0; ii < numberOfDistributions; ii++)
 		{
-			free(inputDoubleSampleValues[i]);
+			free(inputDoubleSampleValues[ii]);
 		}
 
 		free(inputDoubleSampleValues);
@@ -702,10 +702,10 @@ writeOutputDistributionsToCSV(
 		fp = stdout;
 	}
 
-	for (size_t i = 0; i < numberOfOutputDistributions; i++)
+	for (size_t ii = 0; ii < numberOfOutputDistributions; ii++)
 	{
-		fprintf(fp, "%s", outputVariableNames[i]);
-		if (i != numberOfOutputDistributions - 1)
+		fprintf(fp, "%s", outputVariableNames[ii]);
+		if (ii != numberOfOutputDistributions - 1)
 		{
 			fprintf(fp, ", ");
 		}
@@ -718,10 +718,10 @@ writeOutputDistributionsToCSV(
 		{
 			outputFloatVariables = (float *) outputVariables;
 
-			for (size_t i = 0; i < numberOfOutputDistributions; i++)
+			for (size_t ii = 0; ii < numberOfOutputDistributions; ii++)
 			{
-				fprintf(fp, "%e", outputFloatVariables[i]);
-				if (i != numberOfOutputDistributions - 1)
+				fprintf(fp, "%e", outputFloatVariables[ii]);
+				if (ii != numberOfOutputDistributions - 1)
 				{
 					fprintf(fp, ", ");
 				}
@@ -732,10 +732,10 @@ writeOutputDistributionsToCSV(
 		{
 			outputDoubleVariables = (double *) outputVariables;
 
-			for (size_t i = 0; i < numberOfOutputDistributions; i++)
+			for (size_t ii = 0; ii < numberOfOutputDistributions; ii++)
 			{
-				fprintf(fp, "%le", outputDoubleVariables[i]);
-				if (i != numberOfOutputDistributions - 1)
+				fprintf(fp, "%le", outputDoubleVariables[ii]);
+				if (ii != numberOfOutputDistributions - 1)
 				{
 					fprintf(fp, ", ");
 				}
@@ -768,39 +768,39 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 	printf("\t\"description\": \"%s\",\n", description);
 	printf("\t\"plots\": [\n");
 
-	for (size_t i = 0; i < count; i++)
+	for (size_t ii = 0; ii < count; ii++)
 	{
 		printf("\t\t{\n");
 
 		/*
 		 *	We include this property in the JSON for backwards compatibility.
 		 */
-		printf("\t\t\t\"variableID\": \"%s\",\n", jsonVariables[i].variableSymbol);
-		printf("\t\t\t\"variableSymbol\": \"%s\",\n", jsonVariables[i].variableSymbol);
-		printf("\t\t\t\"variableDescription\": \"%s\",\n", jsonVariables[i].variableDescription);
+		printf("\t\t\t\"variableID\": \"%s\",\n", jsonVariables[ii].variableSymbol);
+		printf("\t\t\t\"variableSymbol\": \"%s\",\n", jsonVariables[ii].variableSymbol);
+		printf("\t\t\t\"variableDescription\": \"%s\",\n", jsonVariables[ii].variableDescription);
 		printf("\t\t\t\"values\": [\n");
-		for (size_t j = 0; j < jsonVariables[i].size; j++)
+		for (size_t jj = 0; jj < jsonVariables[ii].size; jj++)
 		{
-			switch (jsonVariables[i].type)
+			switch (jsonVariables[ii].type)
 			{
 				case kJSONVariableTypeDouble:
 				{
-					printf("\t\t\t\t\"%f\"", jsonVariables[i].values.asDouble[j]);
+					printf("\t\t\t\t\"%f\"", jsonVariables[ii].values.asDouble[jj]);
 					break;
 				}
 				case kJSONVariableTypeFloat:
 				{
-					printf("\t\t\t\t\"%f\"", jsonVariables[i].values.asFloat[j]);
+					printf("\t\t\t\t\"%f\"", jsonVariables[ii].values.asFloat[jj]);
 					break;
 				}
 				case kJSONVariableTypeDoubleParticle:
 				{
-					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[i].values.asDouble[j]);
+					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[ii].values.asDouble[jj]);
 					break;
 				}
 				case kJSONVariableTypeFloatParticle:
 				{
-					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[i].values.asFloat[j]);
+					printf("\t\t\t\t\"% " SignaloidParticleModifier "f\"", jsonVariables[ii].values.asFloat[jj]);
 					break;
 				}
 				case kJSONVariableTypeUnknown:
@@ -810,7 +810,7 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 				}
 
 			}
-			if (j < (jsonVariables[i].size - 1))
+			if (jj < (jsonVariables[ii].size - 1))
 			{
 				printf(", \n");
 			}
@@ -822,22 +822,22 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 		printf("\t\t\t],\n");
 
 		printf("\t\t\t\"stdValues\": [\n");
-		for (size_t j = 0; j < jsonVariables[i].size; j++)
+		for (size_t jj = 0; jj < jsonVariables[ii].size; jj++)
 		{
-			switch (jsonVariables[i].type)
+			switch (jsonVariables[ii].type)
 			{
 				case kJSONVariableTypeDouble:
 				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
-						UxHwDoubleNthMoment(jsonVariables[i].values.asDouble[j], 2));
+						sqrt(UxHwDoubleNthMoment(jsonVariables[ii].values.asDouble[jj], 2)));
 					break;
 				}
 				case kJSONVariableTypeFloat:
 				{
 					printf(
 						"\t\t\t\t% " SignaloidParticleModifier "f",
-						UxHwFloatNthMoment(jsonVariables[i].values.asFloat[j], 2));
+						sqrt(UxHwFloatNthMoment(jsonVariables[ii].values.asFloat[jj], 2)));
 					break;
 				}
 				case kJSONVariableTypeFloatParticle:
@@ -852,7 +852,7 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 					fatal("kJSONvariableTypeUnknown must be specified");
 				}
 			}
-			if (j < (jsonVariables[i].size - 1))
+			if (jj < (jsonVariables[ii].size - 1))
 			{
 				printf(", \n");
 			}
@@ -864,7 +864,7 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 		printf("\t\t\t]\n");
 
 		printf("\t\t}");
-		if (i < count - 1)
+		if (ii < count - 1)
 		{
 			printf(",");
 		}
@@ -873,6 +873,81 @@ printJSONVariables(JSONVariable *  jsonVariables, size_t count, const char *  de
 
 	printf("\t]\n");
 	printf("}\n");
+
+	return;
+}
+
+void
+populateJSONVariableStruct(
+	JSONVariable *	jsonVariable,
+	double *	outputVariableValues,
+	const char *	outputVariableDescription,
+	size_t		outputSelect,
+	size_t		numberOfOutputVariableValues)
+{
+	snprintf(jsonVariable->variableSymbol, kCommonConstantMaxCharsPerJSONVariableSymbol, "outputVariables[%zu]", outputSelect);
+	snprintf(jsonVariable->variableDescription, kCommonConstantMaxCharsPerJSONVariableDescription, "%s", outputVariableDescription);
+	jsonVariable->values = (JSONVariablePointer){ .asDouble = outputVariableValues };
+	jsonVariable->type = kJSONVariableTypeDouble;
+	jsonVariable->size = numberOfOutputVariableValues;
+
+	return;
+}
+
+void
+printJSONFormattedOutput(
+	CommonCommandLineArguments *	arguments,
+	double *			monteCarloOutputSamples,
+	double *			outputVariables,
+	const char **			outputVariableDescriptions,
+	size_t				numberOfOutputVariables,
+	const char *			description)
+{
+	JSONVariable *	jsonVariables = (JSONVariable *)checkedCalloc(
+						numberOfOutputVariables,
+						sizeof(JSONVariable),
+						__FILE__,
+						__LINE__);
+	size_t		outputSelectLowerBound;
+	size_t		outputSelectUpperBound;
+
+	if (arguments->outputSelect == numberOfOutputVariables)
+	{
+		outputSelectLowerBound = 0;
+		outputSelectUpperBound = numberOfOutputVariables;
+	}
+	else
+	{
+		outputSelectLowerBound = arguments->outputSelect;
+		outputSelectUpperBound = outputSelectLowerBound + 1;
+	}
+
+	for (size_t outputSelect = outputSelectLowerBound; outputSelect < outputSelectUpperBound; outputSelect++)
+	{
+		/*
+		 *	If in Monte Carlo mode, `pointerToOutputVariable` points to the beginning of the `monteCarloOutputSamples` array.
+		 *	In this case, `arguments->numberOfMonteCarloIterations` is the length of the `monteCarloOutputSamples` array.
+		 *	Else, it points to the entry of the `outputVariables` to be used.
+		 *	In this case, `arguments->numberOfMonteCarloIterations` equals 1.
+		 */
+		double *	pointerToOutputVariable = arguments->isMonteCarloMode ? monteCarloOutputSamples : &outputVariables[outputSelect];
+
+		populateJSONVariableStruct(
+			&jsonVariables[outputSelect],
+			pointerToOutputVariable,
+			outputVariableDescriptions[outputSelect],
+			outputSelect,
+			arguments->numberOfMonteCarloIterations);
+	}
+
+	printJSONVariables(
+		&jsonVariables[outputSelectLowerBound],
+		outputSelectUpperBound - outputSelectLowerBound,
+		description);
+
+	free(jsonVariables);
+
+	return;
 }
 
 static void
@@ -897,6 +972,7 @@ setDefaultCommandLineArgumentValues(CommonCommandLineArguments *  arguments)
 							.isSingleShotExecution		= true,
 						};
 
+	return;
 }
 
 static bool
@@ -934,6 +1010,8 @@ modifyNextArgvForNewLibc(char * const  argv[])
 			arg[0] = '+';
 		}
 	}
+
+	return;
 }
 
 static void
@@ -942,13 +1020,15 @@ checkDuplicates(
 	size_t			currentOptsSize,
 	const char *		newOption)
 {
-	for (size_t i = 0; i < currentOptsSize; i++)
+	for (size_t ii = 0; ii < currentOptsSize; ii++)
 	{
-		if (strcmp(currentOpts[i].name, newOption) == 0)
+		if (strcmp(currentOpts[ii].name, newOption) == 0)
 		{
 			fatal("Internal Error: Duplicate option '%s'", newOption);
 		}
 	}
+
+	return;
 }
 
 static struct option *
@@ -969,22 +1049,22 @@ constructlongOptions(
 	/*
 	 *	Demo options go first (value of option is index into opts)
 	 */
-	for (size_t i = 0; i < demoOptsSize; i++)
+	for (size_t ii = 0; ii < demoOptsSize; ii++)
 	{
-		int	hasArg = demoOpts[i].hasArg ? required_argument : no_argument;
-		int	val = i;
+		int	hasArg = demoOpts[ii].hasArg ? required_argument : no_argument;
+		int	val = ii;
 
-		if ((demoOpts[i].opt == NULL) && (demoOpts[i].optAlternative == NULL))
+		if ((demoOpts[ii].opt == NULL) && (demoOpts[ii].optAlternative == NULL))
 		{
-			fatal("Internal Error: Options for demo missing both option names (index %zu).", i);
+			fatal("Internal Error: Options for demo missing both option names (index %zu).", ii);
 		}
 
-		if (demoOpts[i].opt != NULL)
+		if (demoOpts[ii].opt != NULL)
 		{
-			checkDuplicates(optionsOut, outIndex, demoOpts[i].opt);
+			checkDuplicates(optionsOut, outIndex, demoOpts[ii].opt);
 
 			optionsOut[outIndex] = (struct option) {
-				.name = demoOpts[i].opt,
+				.name = demoOpts[ii].opt,
 				.has_arg = hasArg,
 				.flag = NULL,
 				.val = val,
@@ -992,12 +1072,12 @@ constructlongOptions(
 			outIndex++;
 		}
 
-		if (demoOpts[i].optAlternative != NULL)
+		if (demoOpts[ii].optAlternative != NULL)
 		{
-			checkDuplicates(optionsOut, outIndex, demoOpts[i].optAlternative);
+			checkDuplicates(optionsOut, outIndex, demoOpts[ii].optAlternative);
 
 			optionsOut[outIndex] = (struct option) {
-				.name = demoOpts[i].optAlternative,
+				.name = demoOpts[ii].optAlternative,
 				.has_arg = hasArg,
 				.flag = NULL,
 				.val = val,
@@ -1032,15 +1112,15 @@ parseArgsCoreImplementation(
 	/*
 	 *	Set initial values for `foundOpt` and `foundArg`.
 	 */
-	for (size_t i = 0; i < optionsSize; ++i)
+	for (size_t ii = 0; ii < optionsSize; ++ii)
 	{
-		if (options[i].foundOpt != NULL)
+		if (options[ii].foundOpt != NULL)
 		{
-			*(options[i].foundOpt) = false;
+			*(options[ii].foundOpt) = false;
 		}
-		if (options[i].foundArg != NULL)
+		if (options[ii].foundArg != NULL)
 		{
-			*(options[i].foundArg) = NULL;
+			*(options[ii].foundArg) = NULL;
 		}
 	}
 
@@ -1350,6 +1430,8 @@ printCommonUsage(void)
 		"\t[-b, --benchmarking] (Benchmarking mode: Generate outputs in format for benchmarking.)\n"
 		"\t[-j, --json] (Print output in JSON format.)\n"
 		"\t[-h, --help] (Display this help message.)\n");
+
+	return;
 }
 
 MeanAndVariance
@@ -1362,10 +1444,10 @@ calculateMeanAndVarianceOfFloatSamples(
 	float	sum = 0;
 	float	sumOfSquares = 0;
 
-	for (size_t i = 0; i < dataArraySize; i++)
+	for (size_t ii = 0; ii < dataArraySize; ii++)
 	{
-		sum += dataArray[i];
-		sumOfSquares += dataArray[i] * dataArray[i];
+		sum += dataArray[ii];
+		sumOfSquares += dataArray[ii] * dataArray[ii];
 	}
 
 	mean = sum / dataArraySize;
@@ -1388,10 +1470,10 @@ calculateMeanAndVarianceOfDoubleSamples(
 	double	sum = 0;
 	double	sumOfSquares = 0;
 
-	for (size_t i = 0; i < dataArraySize; i++)
+	for (size_t ii = 0; ii < dataArraySize; ii++)
 	{
-		sum += dataArray[i];
-		sumOfSquares += dataArray[i] * dataArray[i];
+		sum += dataArray[ii];
+		sumOfSquares += dataArray[ii] * dataArray[ii];
 	}
 
 	mean = sum / dataArraySize;
@@ -1504,22 +1586,24 @@ calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
 	float *		meanValueArray,
 	float *		varianceArray)
 {
-	for (size_t j = 0; j < dataArrayColumns; j++)
+	for (size_t jj = 0; jj < dataArrayColumns; jj++)
 	{
 		float		sum = 0;
 		float		sumOfSquares = 0;
 		float 		meanValue;
 
-		for (size_t i = 0; i < dataArrayRows; i++)
+		for (size_t ii = 0; ii < dataArrayRows; ii++)
 		{
-			sum += dataArray[i][j];
-			sumOfSquares += dataArray[i][j] * dataArray[i][j];
+			sum += dataArray[ii][jj];
+			sumOfSquares += dataArray[ii][jj] * dataArray[ii][jj];
 		}
 
 		meanValue = sum / dataArrayRows;
-		meanValueArray[j] = meanValue;
-		varianceArray[j] = sumOfSquares / dataArrayRows - (meanValue * meanValue);
+		meanValueArray[jj] = meanValue;
+		varianceArray[jj] = sumOfSquares / dataArrayRows - (meanValue * meanValue);
 	}
+
+	return;
 }
 
 void
@@ -1530,20 +1614,22 @@ calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
 	double *	meanValueArray,
 	double *	varianceArray)
 {
-	for (size_t j = 0; j < dataArrayColumns; j++)
+	for (size_t jj = 0; jj < dataArrayColumns; jj++)
 	{
 		double		sum = 0;
 		double		sumOfSquares = 0;
 
-		for (size_t i = 0; i < dataArrayRows; i++)
+		for (size_t ii = 0; ii < dataArrayRows; ii++)
 		{
-			sum += dataArray[i][j];
-			sumOfSquares += dataArray[i][j] * dataArray[i][j];
+			sum += dataArray[ii][jj];
+			sumOfSquares += dataArray[ii][jj] * dataArray[ii][jj];
 		}
 
-		meanValueArray[j] = sum / dataArrayRows;
-		varianceArray[j] = sumOfSquares / dataArrayRows - (meanValueArray[j] * meanValueArray[j]);
+		meanValueArray[jj] = sum / dataArrayRows;
+		varianceArray[jj] = sumOfSquares / dataArrayRows - (meanValueArray[jj] * meanValueArray[jj]);
 	}
+
+	return;
 }
 
 
@@ -1562,12 +1648,14 @@ saveMonteCarloFloatDataToDataDotOutFile(
 
 	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
 
-	for (size_t i = 0; i < numberOfMonteCarloIterations; i++)
+	for (size_t ii = 0; ii < numberOfMonteCarloIterations; ii++)
 	{
-		fprintf(fp, "%.20f\n", benchmarkingDataSamples[i]);
+		fprintf(fp, "%.20f\n", benchmarkingDataSamples[ii]);
 	}
 
 	fclose(fp);
+
+	return;
 }
 
 void
@@ -1585,16 +1673,16 @@ saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 
 	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
 
-	for (size_t j = 0; j < numberOfMonteCarloIterations; j++)
+	for (size_t jj = 0; jj < numberOfMonteCarloIterations; jj++)
 	{
-		for (size_t i = 0; i < numberOfOutputVariables; i++)
+		for (size_t ii = 0; ii < numberOfOutputVariables; ii++)
 		{
-			fprintf(fp, "%.20f", benchmarkingDataSamples[i][j]);
+			fprintf(fp, "%.20f", benchmarkingDataSamples[ii][jj]);
 			/*
 			 *	Print a comma after each output variable sample.
 			 *	Print a newline after printing the final output variable.
 			 */
-			if (i < numberOfOutputVariables - 1)
+			if (ii < numberOfOutputVariables - 1)
 			{
 				fprintf(fp, ", ");
 			}
@@ -1606,6 +1694,8 @@ saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 	}
 
 	fclose(fp);
+
+	return;
 }
 
 void
@@ -1622,12 +1712,14 @@ saveMonteCarloDoubleDataToDataDotOutFile(
 
 	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
 
-	for (size_t i = 0; i < numberOfMonteCarloIterations; i++)
+	for (size_t ii = 0; ii < numberOfMonteCarloIterations; ii++)
 	{
-		fprintf(fp, "%.20lf\n", benchmarkingDataSamples[i]);
+		fprintf(fp, "%.20lf\n", benchmarkingDataSamples[ii]);
 	}
 
 	fclose(fp);
+
+	return;
 }
 
 void
@@ -1645,16 +1737,16 @@ saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 
 	fprintf(fp, "%" PRIu64 "\n", cpuTimeElapsedMicroSeconds);
 
-	for (size_t j = 0; j < numberOfMonteCarloIterations; j++)
+	for (size_t jj = 0; jj < numberOfMonteCarloIterations; jj++)
 	{
-		for (size_t i = 0; i < numberOfOutputVariables; i++)
+		for (size_t ii = 0; ii < numberOfOutputVariables; ii++)
 		{
-			fprintf(fp, "%.20f", benchmarkingDataSamples[i][j]);
+			fprintf(fp, "%.20f", benchmarkingDataSamples[ii][jj]);
 			/*
 			 *	Print a comma after each output variable sample.
 			 *	Print a newline after printing the final output variable.
 			 */
-			if (i < numberOfOutputVariables - 1)
+			if (ii < numberOfOutputVariables - 1)
 			{
 				fprintf(fp, ", ");
 			}
@@ -1666,6 +1758,8 @@ saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 	}
 
 	fclose(fp);
+
+	return;
 }
 
 void *
