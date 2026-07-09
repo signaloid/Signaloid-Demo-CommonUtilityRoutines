@@ -61,8 +61,7 @@ Parses both common and application-specific command-line options.
 ```c
 #include "common.h"
 
-int 
-main (int argc, char *  argv[])
+int main (int argc, char *  argv[])
 {
         CommonCommandLineArguments args;
 
@@ -70,7 +69,7 @@ main (int argc, char *  argv[])
          *      Define demo specific options
          */
         DemoOption myOptions[] = {
-                { .opt = "custom-flag", .optAlternative = "c", true, &customArg, &foundCustom },
+                { "custom-flag", "c", true, &customArg, &foundCustom },
                 { ZERO_STRUCT_INIT }  /* Terminator */
         };
 
@@ -313,10 +312,9 @@ All functions return `CommonConstantReturnType`:
 - `kCommonConstantReturnTypeError` (1) - Operation failed
 
 The library uses `fatal()` for unrecoverable errors and prints descriptive error messages to `stderr` for recoverable issues.
+# Examples usage
 
-## Examples usage
-
-### JSON printing usage
+## JSON printing usage
 ```c
 #include "common.h"
 /*
@@ -329,9 +327,7 @@ typedef enum
 
 static const double kDefaultMean        = 0.0;
 static const double kDefaultVariance    = 1.0;
-
-int
-main(int argc, char *  argv[])
+int main(int argc, char *  argv[])
 {
         JSONVariable jsonVariable;
         double gaussOutput = UxHwDoubleGaussDist(kDefaultMean, kDefaultVariance);
@@ -373,7 +369,7 @@ This outputs
                                 "0.000000"
                         ],
                         "stdValues": [
-                                0.999750
+                                0.999500
                         ]
                 }
         ]
@@ -386,8 +382,7 @@ This outputs
 ```c
 #include "common.h"
 
-int
-main(int argc, char *  argv[]) {
+int main(int argc, char *  argv[]) {
         CommonCommandLineArguments args;
 
         /* 

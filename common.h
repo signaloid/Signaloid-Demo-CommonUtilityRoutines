@@ -27,9 +27,9 @@
 #include <inttypes.h>
 
 #ifdef __cplusplus
-#define ZERO_STRUCT_INIT
+ #define ZERO_STRUCT_INIT
 #else
-#define ZERO_STRUCT_INIT 0
+ #define ZERO_STRUCT_INIT 0
 #endif
 
 #ifdef __cplusplus
@@ -37,19 +37,23 @@ extern "C"
 {
 #endif
 
+#ifdef NO_OS_AVAILABLE
+void returnZeroNoOS(void);
+#endif
+
 typedef enum
 {
-	kCommonConstantMaxCharsPerFilepath			= 1024,
-	kCommonConstantMaxCharsPerLine				= 1024 * 1024,
-	kCommonConstantMaxNumberOfInputSamples			= 10000,
-	kCommonConstantMaxCharsPerJSONVariableSymbol		= 256,
-	kCommonConstantMaxCharsPerJSONVariableDescription	= 1024,
+	kCommonConstantMaxCharsPerFilepath                  = 1024,
+	kCommonConstantMaxCharsPerLine                      = 1024 * 1024,
+	kCommonConstantMaxNumberOfInputSamples              = 10000,
+	kCommonConstantMaxCharsPerJSONVariableSymbol        = 256,
+	kCommonConstantMaxCharsPerJSONVariableDescription   = 1024,
 } CommonConstant;
 
 typedef enum
 {
-	kCommonConstantReturnTypeError		= 1,
-	kCommonConstantReturnTypeSuccess	= 0,
+	kCommonConstantReturnTypeError      = 1,
+	kCommonConstantReturnTypeSuccess    = 0,
 } CommonConstantReturnType;
 
 typedef enum
@@ -58,6 +62,12 @@ typedef enum
 	kFloatingPointVariableTypeFloat,
 	kFloatingPointVariableTypeDouble,
 } FloatingPointVariableType;
+
+typedef enum
+{
+	kOutputVariableTypeDistribution     = 0,
+	kOutputVariableTypeScalar           = 1,
+} kOutputVariableTypeIndex;
 
 typedef enum
 {
@@ -70,17 +80,17 @@ typedef enum
 
 typedef union
 {
-	const double *		asDouble;
-	const float *		asFloat;
+	const double *  asDouble;
+	const float *   asFloat;
 } JSONVariablePointer;
 
 typedef struct JSONVariable
 {
-	char			variableSymbol[kCommonConstantMaxCharsPerJSONVariableSymbol];
-	char			variableDescription[kCommonConstantMaxCharsPerJSONVariableDescription];
-	JSONVariablePointer	values;
-	JSONVariableType	type;
-	size_t			size;
+	char                variableSymbol[kCommonConstantMaxCharsPerJSONVariableSymbol];
+	char                variableDescription[kCommonConstantMaxCharsPerJSONVariableDescription];
+	JSONVariablePointer values;
+	JSONVariableType    type;
+	size_t              size;
 } JSONVariable;
 
 /**
@@ -90,7 +100,7 @@ typedef struct JSONVariable
  *	@param	ptr	Pointer to value to force compiler to keep. Must not be `NULL`.
  */
 void
-doNotOptimize(void *  ptr);
+doNotOptimize(void * ptr);
 
 
 /**
@@ -100,8 +110,10 @@ doNotOptimize(void *  ptr);
  *	@param		format args
  */
 __attribute__((noreturn))
-void	fatal(const char *fmt, ...)
-	__attribute__ ((format (printf, 1, 2)));
+
+void
+fatal(const char * fmt, ...)
+__attribute__ ((format(printf, 1, 2)));
 
 /**
  *	@brief	Read single-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
@@ -114,10 +126,10 @@ void	fatal(const char *fmt, ...)
  */
 CommonConstantReturnType
 readInputFloatDistributionsFromCSV(
-	const char *		inputFilePath,
-	const char * const *	expectedHeaders,
-	float *			inputDistributions,
-	size_t			numberOfDistributions);
+	const char *        inputFilePath,
+	const char *const * expectedHeaders,
+	float *             inputDistributions,
+	size_t              numberOfDistributions);
 
 /**
  *	@brief	Read double-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
@@ -130,10 +142,10 @@ readInputFloatDistributionsFromCSV(
  */
 CommonConstantReturnType
 readInputDoubleDistributionsFromCSV(
-	const char *		inputFilePath,
-	const char * const *	expectedHeaders,
-	double *		inputDistributions,
-	size_t			numberOfDistributions);
+	const char *        inputFilePath,
+	const char *const * expectedHeaders,
+	double *            inputDistributions,
+	size_t              numberOfDistributions);
 
 /**
  *	@brief	Write Ux-valued data of single-precision floating-point variables to a CSV file.
@@ -146,10 +158,10 @@ readInputDoubleDistributionsFromCSV(
  */
 CommonConstantReturnType
 writeOutputFloatDistributionsToCSV(
-	const char *		outputFilePath,
-	const float *		outputVariables,
-	const char * const *	outputVariableNames,
-	size_t			numberOfOutputDistributions);
+	const char *        outputFilePath,
+	const float *       outputVariables,
+	const char *const * outputVariableNames,
+	size_t              numberOfOutputDistributions);
 
 /**
  *	@brief	Write Ux-valued data of double-precision floating-point variables to a CSV file.
@@ -162,10 +174,10 @@ writeOutputFloatDistributionsToCSV(
  */
 CommonConstantReturnType
 writeOutputDoubleDistributionsToCSV(
-	const char *		outputFilePath,
-	const double *		outputVariables,
-	const char * const *	outputVariableNames,
-	size_t			numberOfOutputDistributions);
+	const char *        outputFilePath,
+	const double *      outputVariables,
+	const char *const * outputVariableNames,
+	size_t              numberOfOutputDistributions);
 
 /**
  *	@brief	Print Ux-valued data to `stdout` in JSON format.
@@ -176,9 +188,9 @@ writeOutputDoubleDistributionsToCSV(
  */
 void
 printJSONVariables(
-	JSONVariable *	jsonVariables,
-	size_t		count,
-	const char *	description);
+	JSONVariable *  jsonVariables,
+	size_t          count,
+	const char *    description);
 
 /**
  *	@brief	Parse an integer at the start of `str`, trailing characters are ignored.
@@ -189,8 +201,8 @@ printJSONVariables(
  */
 CommonConstantReturnType
 parseIntChecked(
-	const char *	str,
-	int *		out);
+	const char *    str,
+	int *           out);
 
 /**
  *	@brief	Parse a single-precision floating-point value at the start of `str`, trailing characters are ignored.
@@ -201,8 +213,8 @@ parseIntChecked(
  */
 CommonConstantReturnType
 parseFloatChecked(
-	const char *	str,
-	float *		out);
+	const char *    str,
+	float *         out);
 
 /**
  *	@brief	Parse a double-precision floating-pointvalue at the start of `str`, trailing characters are ignored.
@@ -213,25 +225,25 @@ parseFloatChecked(
  */
 CommonConstantReturnType
 parseDoubleChecked(
-	const char *	str,
-	double *	out);
+	const char *    str,
+	double *        out);
 
 typedef struct
 {
-	char	outputFilePath[kCommonConstantMaxCharsPerFilepath];
-	char	inputFilePath[kCommonConstantMaxCharsPerFilepath];
-	bool	isWriteToFileEnabled;
-	bool	isTimingEnabled;
-	size_t	numberOfMonteCarloIterations;
-	size_t	outputSelect;
-	bool	isOutputSelected;
-	bool	isVerbose;
-	bool	isInputFromFileEnabled;
-	bool	isOutputJSONMode;
-	bool	isHelpEnabled;
-	bool	isBenchmarkingMode;
-	bool	isMonteCarloMode;
-	bool	isSingleShotExecution;
+	char    outputFilePath[kCommonConstantMaxCharsPerFilepath];
+	char    inputFilePath[kCommonConstantMaxCharsPerFilepath];
+	bool    isWriteToFileEnabled;
+	bool    isTimingEnabled;
+	size_t  numberOfMonteCarloIterations;
+	size_t  outputSelect;
+	bool    isOutputSelected;
+	bool    isVerbose;
+	bool    isInputFromFileEnabled;
+	bool    isOutputJSONMode;
+	bool    isHelpEnabled;
+	bool    isBenchmarkingMode;
+	bool    isMonteCarloMode;
+	bool    isSingleShotExecution;
 } CommonCommandLineArguments;
 
 typedef struct
@@ -239,14 +251,14 @@ typedef struct
 	/**
 	 *	@brief The command-line flag (without leading `-` or `--`) for this option.
 	 */
-	const char *	opt;
+	const char * opt;
 
 	/**
 	 *	@brief An alternative command-line flag (without leading `-` or `--`) for this option.
 	 *
 	 *	@details Often used for short options.
 	 */
-	const char *	optAlternative;
+	const char * optAlternative;
 
 	/**
 	 *	@brief Whether this option takes an argument.
@@ -254,7 +266,7 @@ typedef struct
 	 *	@details If set, then parsing will fail unless the command-line flag has an
 	 *	argument.
 	 */
-	bool		hasArg;
+	bool hasArg;
 
 	/**
 	 *	@brief Pass pointer to variable in which any argument will be stored.
@@ -262,14 +274,14 @@ typedef struct
 	 *	@details May be to `NULL` (e.g. if this option does not have an argument), in which
 	 *	case nothing will be written.
 	 */
-	const char **	foundArg;
+	const char * * foundArg;
 
 	/**
 	 *	@brief Pass pointer to variable which will be set to true if option is found.
 	 *
 	 *	@details May be to `NULL`, in which case nothing will be written.
 	 */
-	bool *		foundOpt;
+	bool * foundOpt;
 } DemoOption;
 
 /**
@@ -285,10 +297,10 @@ typedef struct
  */
 CommonConstantReturnType
 parseArgs(
-	int				argc,
-	char *  const			argv[],
-	CommonCommandLineArguments *	arguments,
-	DemoOption *			demoSpecificOptions);
+	int                             argc,
+	char *const                     argv[],
+	CommonCommandLineArguments *    arguments,
+	DemoOption *                    demoSpecificOptions);
 
 /**
  *	@brief	Print the common part of the usage to stdout.
@@ -298,8 +310,8 @@ printCommonUsage(void);
 
 typedef struct
 {
-	double	mean;
-	double	variance;
+	double  mean;
+	double  variance;
 } MeanAndVariance;
 
 /**
@@ -311,8 +323,8 @@ typedef struct
  */
 MeanAndVariance
 calculateMeanAndVarianceOfFloatSamples(
-	const float *	dataArray,
-	size_t		dataArraySize);
+	const float *   dataArray,
+	size_t          dataArraySize);
 
 /**
  *	@brief	Caluculate mean and variance of double data.
@@ -323,8 +335,8 @@ calculateMeanAndVarianceOfFloatSamples(
  */
 MeanAndVariance
 calculateMeanAndVarianceOfDoubleSamples(
-	const double *	dataArray,
-	size_t		dataArraySize);
+	const double *  dataArray,
+	size_t          dataArraySize);
 
 /**
  *	@brief  Caluclate the `quantilePercentage` quantile of a set of `float` samples.
@@ -332,12 +344,12 @@ calculateMeanAndVarianceOfDoubleSamples(
  *	@param  dataArray		Data array for which to compute the quantile
  *	@param  quantilePercentage	The alpha value for which to take the quantile
  *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
- */	
+ */
 float
 calculatePercentageQuantileOfFloatSamples(
-		const float *	dataArray,
-		float		quantilePercentage,
-		size_t		dataArraySize);
+	const float *   dataArray,
+	float           quantilePercentage,
+	size_t          dataArraySize);
 
 /**
  *	@brief  Caluclate the `quantilePercentage` quantile of a set of `double` samples.
@@ -345,12 +357,12 @@ calculatePercentageQuantileOfFloatSamples(
  *	@param  dataArray		Data array for which to compute the quantile
  *	@param  quantilePercentage	The alpha value for which to take the quantile
  *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
- */	
-double	
+ */
+double
 calculatePercentageQuantileOfDoubleSamples(
-		const double *	dataArray,
-		double		quantilePercentage,
-		size_t		dataArraySize);
+	const double *  dataArray,
+	double          quantilePercentage,
+	size_t          dataArraySize);
 
 /**
  *	@brief  Caluculate mean and variance of multidimensional float data.
@@ -363,11 +375,11 @@ calculatePercentageQuantileOfDoubleSamples(
  */
 void
 calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
-	float **	dataArray,
-	size_t		dataArrayRows,
-	size_t		dataArrayColumns,
-	float *		meanValueArray,
-	float *		varianceArray);
+	float * *   dataArray,
+	size_t      dataArrayRows,
+	size_t      dataArrayColumns,
+	float *     meanValueArray,
+	float *     varianceArray);
 
 /**
  *	@brief  Caluculate mean and variance of multidimensional double data.
@@ -380,13 +392,11 @@ calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
  */
 void
 calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
-	double **	dataArray,
-	size_t		dataArrayRows,
-	size_t		dataArrayColumns,
-	double *	meanValueArray,
-	double *	varianceArray);
-
-
+	double * *  dataArray,
+	size_t      dataArrayRows,
+	size_t      dataArrayColumns,
+	double *    meanValueArray,
+	double *    varianceArray);
 
 /**
  *	@brief	Writes Monte Carlo samples to a file 'data.out'
@@ -398,9 +408,9 @@ calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
  */
 void
 saveMonteCarloFloatDataToDataDotOutFile(
-	const float *	benchmarkingDataSamples,
-	uint64_t	cpuTimeElapsedMicroSeconds,
-	size_t		numberOfMonteCarloIterations);
+	const float *   benchmarkingDataSamples,
+	uint64_t        cpuTimeElapsedMicroSeconds,
+	size_t          numberOfMonteCarloIterations);
 
 /**
  *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
@@ -414,10 +424,10 @@ saveMonteCarloFloatDataToDataDotOutFile(
  */
 void
 saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
-	float **	benchmarkingDataSamples,
-	uint64_t	cpuTimeElapsedMicroSeconds,
-	size_t		numberOfOutputVariables,
-	size_t		numberOfMonteCarloIterations);
+	float * *   benchmarkingDataSamples,
+	uint64_t    cpuTimeElapsedMicroSeconds,
+	size_t      numberOfOutputVariables,
+	size_t      numberOfMonteCarloIterations);
 
 /**
  *	@brief	Writes Monte Carlo samples to a file 'data.out'
@@ -429,9 +439,9 @@ saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
  */
 void
 saveMonteCarloDoubleDataToDataDotOutFile(
-	const double *	benchmarkingDataSamples,
-	uint64_t	cpuTimeElapsedMicroSeconds,
-	size_t		numberOfMonteCarloIterations);
+	const double *  benchmarkingDataSamples,
+	uint64_t        cpuTimeElapsedMicroSeconds,
+	size_t          numberOfMonteCarloIterations);
 
 /**
  *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
@@ -445,10 +455,10 @@ saveMonteCarloDoubleDataToDataDotOutFile(
  */
 void
 saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
-	double **	benchmarkingDataSamples,
-	uint64_t	cpuTimeElapsedMicroSeconds,
-	size_t		numberOfOutputVariables,
-	size_t		numberOfMonteCarloIterations);
+	double * *  benchmarkingDataSamples,
+	uint64_t    cpuTimeElapsedMicroSeconds,
+	size_t      numberOfOutputVariables,
+	size_t      numberOfMonteCarloIterations);
 
 /**
  *	@brief	Call Malloc and abort on allocation failure.
@@ -460,9 +470,9 @@ saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
  */
 void *
 checkedMalloc(
-	size_t		size,
-	const char *	file,
-	int		line);
+	size_t          size,
+	const char *    file,
+	int             line);
 
 /**
  *	@brief	Call Calloc and abort on allocation failure.
@@ -475,14 +485,46 @@ checkedMalloc(
  */
 void *
 checkedCalloc(
-	size_t		num,
-	size_t		size,
-	const char *	file,
-	int		line);
+	size_t          num,
+	size_t          size,
+	const char *    file,
+	int             line);
 
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
+/**
+ *	@brief	Determine the index range of selected outputs based on command-line arguments.
+ *
+ *	@param	arguments				Pointer to the command-line arguments struct.
+ *	@param	numberOfOutputVariables			Number of output variables.
+ *	@param	pointerToOutputSelectLowerBound		Pointer to store the lower bound of the selected output range.
+ *	@param	pointerToOutputSelectUpperBound		Pointer to store the upper bound of the selected output range.
+ *	@return	void
+ */
+void
+determineIndexRangeOfSelectedOutputs(
+	CommonCommandLineArguments *    arguments,
+	size_t                          numberOfOutputVariables,
+	size_t *                        pointerToOutputSelectLowerBound,
+	size_t *                        pointerToOutputSelectUpperBound);
+
+/**
+ *	@brief	Print human-consumable output for selected output variables.
+ *
+ *	@param	arguments			Pointer to the common command-line arguments struct.
+ *	@param	numberOfOutputVariables		Number of output variables.
+ *	@param	outputVariables			Array of output variable values.
+ *	@param	outputVariableNames		Array of output variable name strings.
+ *	@param	outputVariableDescriptions	Array of output variable description strings.
+ *	@param	monteCarloOutputSamples		Array of Monte Carlo output samples.
+ *	@return	void
+ */
+void
+printHumanConsumableOutput(
+	CommonCommandLineArguments *    arguments,
+	size_t                          numberOfOutputVariables,
+	double *                        outputVariables,
+	const char *                    outputVariableNames[],
+	const char *                    outputVariableDescriptions[],
+	double *                        monteCarloOutputSamples);
 
 /**
  *	@brief	Populates a JSONVariable struct with values for JSON output.
@@ -495,11 +537,11 @@ checkedCalloc(
  */
 void
 populateJSONVariableStruct(
-	JSONVariable *	jsonVariable,
-	double *	outputVariableValues,
-	const char *	outputVariableDescription,
-	size_t		outputSelect,
-	size_t		numberOfOutputVariableValues);
+	JSONVariable *  jsonVariable,
+	double *        outputVariableValues,
+	const char *    outputVariableDescription,
+	size_t          outputSelect,
+	size_t          numberOfOutputVariableValues);
 
 /**
  *	@brief	Prints output distributions in JSON format based on command-line arguments.
@@ -514,9 +556,13 @@ populateJSONVariableStruct(
  */
 void
 printJSONFormattedOutput(
-	CommonCommandLineArguments *	arguments,
-	double *			monteCarloOutputSamples,
-	double *			outputVariables,
-	const char **			outputVariableDescriptions,
-	size_t				numberOfOutputVariables,
-	const char *			description);
+	CommonCommandLineArguments *    arguments,
+	double *                        monteCarloOutputSamples,
+	double *                        outputVariables,
+	const char * *                  outputVariableDescriptions,
+	size_t                          numberOfOutputVariables,
+	const char *                    description);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
