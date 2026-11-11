@@ -38,13 +38,15 @@ extern "C"
 #endif
 
 #ifdef NO_OS_AVAILABLE
-void returnZeroNoOS(void);
+
+void
+returnZeroNoOS(void);
 #endif
 
 typedef enum
 {
 	kCommonConstantMaxCharsPerFilepath                  = 1024,
-	kCommonConstantMaxCharsPerLine                      = 1024 * 1024,
+	kCommonConstantMaxCharsPerLine                      = 512 * 1024,
 	kCommonConstantMaxNumberOfInputSamples              = 10000,
 	kCommonConstantMaxCharsPerJSONVariableSymbol        = 256,
 	kCommonConstantMaxCharsPerJSONVariableDescription   = 1024,
@@ -65,8 +67,8 @@ typedef enum
 
 typedef enum
 {
-	kOutputVariableTypeDistribution     = 0,
-	kOutputVariableTypeScalar           = 1,
+	kOutputVariableTypeDistribution = 0,
+	kOutputVariableTypeScalar       = 1,
 } kOutputVariableTypeIndex;
 
 typedef enum
@@ -118,7 +120,7 @@ __attribute__ ((format(printf, 1, 2)));
 /**
  *	@brief	Read single-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
  *
- *	@param	inputFilePath		path to CSV file to read from
+ *	@param	inputFilePath		path to CSV file to read from (`"stdin"` is not supported)
  *	@param	expectedHeaders		array of headers that should be in the CSV data
  *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
  *	@param	numberOfDistributions	size of `inputDistributions` _and_ `expectedHeaders` arrays
@@ -134,7 +136,7 @@ readInputFloatDistributionsFromCSV(
 /**
  *	@brief	Read double-precision floating-point data from a CSV file. Data entries are either numbers or Ux-values.
  *
- *	@param	inputFilePath		path to CSV file to read from
+ *	@param	inputFilePath		path to CSV file to read from (`"stdin"` is not supported)
  *	@param	expectedHeaders		array of headers that should be in the CSV data
  *	@param	inputDistributions	array of input distributions to be obtained from the read CSV data
  *	@param	numberOfDistributions	size of `inputDistributions` _and_ `expectedHeaders` arrays
@@ -150,7 +152,7 @@ readInputDoubleDistributionsFromCSV(
 /**
  *	@brief	Write Ux-valued data of single-precision floating-point variables to a CSV file.
  *
- *	@param	outputFilePath			path prefix for the output CSV file to write to
+ *	@param	outputFilePath			path to the output CSV file to write to, or `"stdout"`
  *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
  *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
  *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
@@ -166,7 +168,7 @@ writeOutputFloatDistributionsToCSV(
 /**
  *	@brief	Write Ux-valued data of double-precision floating-point variables to a CSV file.
  *
- *	@param	outputFilePath			path prefix for the output CSV file to write to
+ *	@param	outputFilePath			path to the output CSV file to write to, or `"stdout"`
  *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
  *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
  *	@param	numberOfOutputDistributions	number of output distributions whose Ux representations we will write to the output CSV
@@ -217,7 +219,7 @@ parseFloatChecked(
 	float *         out);
 
 /**
- *	@brief	Parse a double-precision floating-pointvalue at the start of `str`, trailing characters are ignored.
+ *	@brief	Parse a double-precision floating-point value at the start of `str`, trailing characters are ignored.
  *
  *	@param	str	String to parse
  *	@param	out	Will be set to parsed value
@@ -271,28 +273,31 @@ typedef struct
 	/**
 	 *	@brief Pass pointer to variable in which any argument will be stored.
 	 *
-	 *	@details May be to `NULL` (e.g. if this option does not have an argument), in which
-	 *	case nothing will be written.
+	 *	@details May be `NULL` (e.g. if this option does not have an argument), in which
+	 *	case nothing will be written. `parseArgs()` sets it to `NULL` before parsing.
 	 */
 	const char * * foundArg;
 
 	/**
 	 *	@brief Pass pointer to variable which will be set to true if option is found.
 	 *
-	 *	@details May be to `NULL`, in which case nothing will be written.
+	 *	@details May be `NULL`, in which case nothing will be written. `parseArgs()` sets it to
+	 *	`false` before parsing.
 	 */
 	bool * foundOpt;
 } DemoOption;
 
 /**
- *	@brief	Parse command-line arguments into `args`.
+ *	@brief	Parse command-line arguments into `arguments`.
  *
- * 	@details Grouped short options are not supported. (Use `-W -j` rather than `-Wj`.)
+ * 	@details Grouped short options are not supported. (Use `-v -j` rather than `-vj`.)
+ *		Option names must be given in full. Abbreviations such as `-m` for `-M` are errors.
+ *		Before parsing, every `foundOpt` is set to `false` and every `foundArg` is set to `NULL`.
  *
  *	@param	argc			As provided to `main()`
  *	@param	argv			As provided to `main()`
- *	@param	args			Parsed command-line arguments are stored here
- *	@param	demoSpecificOptions	Extra command-line arguments to parse
+ *	@param	arguments		Parsed command-line arguments are stored here
+ *	@param	demoSpecificOptions	Extra command-line arguments to parse, or `NULL` if none
  *	@return 			`kCommonConstantReturnTypeError` on error, `kCommonConstantReturnTypeSuccess` on success
  */
 CommonConstantReturnType
@@ -303,7 +308,7 @@ parseArgs(
 	DemoOption *                    demoSpecificOptions);
 
 /**
- *	@brief	Print the common part of the usage to stdout.
+ *	@brief	Print the common part of the usage to stderr.
  */
 void
 printCommonUsage(void);
@@ -315,7 +320,8 @@ typedef struct
 } MeanAndVariance;
 
 /**
- *	@brief	Caluculate mean and variance of float data.
+ *	@brief	Calculate mean and (population) variance of float data.
+ *		Calls `fatal()` if `dataArraySize` is 0.
  *
  *	@param	dataArray	data array for which to compute mean and variance
  *	@param	dataArraySize	number of items in `dataArray`
@@ -327,7 +333,8 @@ calculateMeanAndVarianceOfFloatSamples(
 	size_t          dataArraySize);
 
 /**
- *	@brief	Caluculate mean and variance of double data.
+ *	@brief	Calculate mean and (population) variance of double data.
+ *		Calls `fatal()` if `dataArraySize` is 0.
  *
  *	@param	dataArray	data array for which to compute mean and variance
  *	@param	dataArraySize	number of items in `dataArray`
@@ -339,11 +346,14 @@ calculateMeanAndVarianceOfDoubleSamples(
 	size_t          dataArraySize);
 
 /**
- *	@brief  Caluclate the `quantilePercentage` quantile of a set of `float` samples.
+ *	@brief  Calculate the `quantilePercentage` quantile of a set of `float` samples.
+ *		Calls `fatal()` if `dataArraySize` is 0, `quantilePercentage` is outside [0, 1], or a sample is NaN.
  *
  *	@param  dataArray		Data array for which to compute the quantile
- *	@param  quantilePercentage	The alpha value for which to take the quantile
- *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
+ *	@param  quantilePercentage	The alpha value for which to take the quantile, in [0, 1]
+ *	@param  dataArraySize		Length of `dataArray` (Number of MC samples typically)
+ *	@return				The sample at index `floor(quantilePercentage * dataArraySize)` of the sorted
+ *					samples (the last sample if `quantilePercentage` is 1)
  */
 float
 calculatePercentageQuantileOfFloatSamples(
@@ -352,11 +362,14 @@ calculatePercentageQuantileOfFloatSamples(
 	size_t          dataArraySize);
 
 /**
- *	@brief  Caluclate the `quantilePercentage` quantile of a set of `double` samples.
+ *	@brief  Calculate the `quantilePercentage` quantile of a set of `double` samples.
+ *		Calls `fatal()` if `dataArraySize` is 0, `quantilePercentage` is outside [0, 1], or a sample is NaN.
  *
  *	@param  dataArray		Data array for which to compute the quantile
- *	@param  quantilePercentage	The alpha value for which to take the quantile
- *	@param  dataArraySize		Length of `dataArray`(Number of MC samples typically)
+ *	@param  quantilePercentage	The alpha value for which to take the quantile, in [0, 1]
+ *	@param  dataArraySize		Length of `dataArray` (Number of MC samples typically)
+ *	@return				The sample at index `floor(quantilePercentage * dataArraySize)` of the sorted
+ *					samples (the last sample if `quantilePercentage` is 1)
  */
 double
 calculatePercentageQuantileOfDoubleSamples(
@@ -365,7 +378,8 @@ calculatePercentageQuantileOfDoubleSamples(
 	size_t          dataArraySize);
 
 /**
- *	@brief  Caluculate mean and variance of multidimensional float data.
+ *	@brief  Calculate mean and (population) variance of multidimensional float data.
+ *		Calls `fatal()` if `dataArrayRows` is 0.
  *
  *	@param  dataArray		Multidimensional data array for which to compute mean and variance
  *	@param  dataArrayRows		number of rows in `dataArray`(Number of MC samples typically)
@@ -382,7 +396,8 @@ calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
 	float *     varianceArray);
 
 /**
- *	@brief  Caluculate mean and variance of multidimensional double data.
+ *	@brief  Calculate mean and (population) variance of multidimensional double data.
+ *		Calls `fatal()` if `dataArrayRows` is 0.
  *
  *	@param  dataArray		Multidimensional data array for which to compute mean and variance
  *	@param  dataArrayRows		number of rows in `dataArray`(Number of MC samples typically)
@@ -399,14 +414,16 @@ calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
 	double *    varianceArray);
 
 /**
- *	@brief	Writes Monte Carlo samples to a file 'data.out'
+ *	@brief	Writes Monte Carlo samples to a file 'data.out'.
+ *		The first line is `cpuTimeElapsedMicroSeconds`, then one sample per line.
+ *		Calls `fatal()` if the file cannot be opened.
  *
  *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of float Monte Carlo samples
  *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
  *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
- *	@return	void
+ *	@return	`kCommonConstantReturnTypeError` if writing fails, `kCommonConstantReturnTypeSuccess` otherwise
  */
-void
+CommonConstantReturnType
 saveMonteCarloFloatDataToDataDotOutFile(
 	const float *   benchmarkingDataSamples,
 	uint64_t        cpuTimeElapsedMicroSeconds,
@@ -414,15 +431,18 @@ saveMonteCarloFloatDataToDataDotOutFile(
 
 /**
  *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
- *		Each line contains a sample for each variable. Samples are comma-separated.
+ *		The first line is `cpuTimeElapsedMicroSeconds`. Each following line contains a sample for
+ *		each variable. Samples are comma-separated. Calls `fatal()` if the file cannot be opened.
  *
- *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of float Monte Carlo samples
+ *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of float
+ *						Monte Carlo samples
  *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
- *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains `numberOfOutputVariables` comma-separated samples.
+ *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains
+ *						`numberOfOutputVariables` comma-separated samples.
  *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
- *	@return	void
+ *	@return	`kCommonConstantReturnTypeError` if writing fails, `kCommonConstantReturnTypeSuccess` otherwise
  */
-void
+CommonConstantReturnType
 saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 	float * *   benchmarkingDataSamples,
 	uint64_t    cpuTimeElapsedMicroSeconds,
@@ -430,14 +450,16 @@ saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 	size_t      numberOfMonteCarloIterations);
 
 /**
- *	@brief	Writes Monte Carlo samples to a file 'data.out'
+ *	@brief	Writes Monte Carlo samples to a file 'data.out'.
+ *		The first line is `cpuTimeElapsedMicroSeconds`, then one sample per line.
+ *		Calls `fatal()` if the file cannot be opened.
  *
  *	@param	benchmarkingDataSamples		Array (length `numberOfMonteCarloIterations`) of double Monte Carlo samples
  *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
  *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
- *	@return	void
+ *	@return	`kCommonConstantReturnTypeError` if writing fails, `kCommonConstantReturnTypeSuccess` otherwise
  */
-void
+CommonConstantReturnType
 saveMonteCarloDoubleDataToDataDotOutFile(
 	const double *  benchmarkingDataSamples,
 	uint64_t        cpuTimeElapsedMicroSeconds,
@@ -445,15 +467,18 @@ saveMonteCarloDoubleDataToDataDotOutFile(
 
 /**
  *	@brief	Writes Monte Carlo samples for multiple variables to a file 'data.out'.
- *		Each line contains a sample for each variable. Samples are comma-separated.
+ *		The first line is `cpuTimeElapsedMicroSeconds`. Each following line contains a sample for
+ *		each variable. Samples are comma-separated. Calls `fatal()` if the file cannot be opened.
  *
- *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of double Monte Carlo samples
+ *	@param	benchmarkingDataSamples		2D Array (`numberOfOutputVariables` x `numberOfMonteCarloIterations`) of double
+ *						Monte Carlo samples
  *	@param	cpuTimeElapsedMicroSeconds	Execution time of kernel
- *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains `numberOfOutputVariables` comma-separated samples
+ *	@param	numberOfOutputVariables		Number of output variables. Each line of the file contains
+ *						`numberOfOutputVariables` comma-separated samples
  *	@param	numberOfMonteCarloIterations	Number of samples (one per iteration)
- *	@return	void
+ *	@return	`kCommonConstantReturnTypeError` if writing fails, `kCommonConstantReturnTypeSuccess` otherwise
  */
-void
+CommonConstantReturnType
 saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 	double * *  benchmarkingDataSamples,
 	uint64_t    cpuTimeElapsedMicroSeconds,
@@ -461,7 +486,7 @@ saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 	size_t      numberOfMonteCarloIterations);
 
 /**
- *	@brief	Call Malloc and abort on allocation failure.
+ *	@brief	Call malloc and exit via `fatal()` on allocation failure.
  *
  *	@param	size	Passed to malloc
  *	@param	file	File name to include in error message
@@ -475,10 +500,10 @@ checkedMalloc(
 	int             line);
 
 /**
- *	@brief	Call Calloc and abort on allocation failure.
+ *	@brief	Call calloc and exit via `fatal()` on allocation failure.
  *
- *	@param	size	Passed to calloc
  *	@param	num	Passed to calloc
+ *	@param	size	Passed to calloc
  *	@param	file	File name to include in error message
  *	@param	line	Line number to include in error message
  *	@return		Pointer as returned by calloc
@@ -492,6 +517,7 @@ checkedCalloc(
 
 /**
  *	@brief	Determine the index range of selected outputs based on command-line arguments.
+ *		Calls `fatal()` if `arguments->outputSelect` is greater than `numberOfOutputVariables`.
  *
  *	@param	arguments				Pointer to the command-line arguments struct.
  *	@param	numberOfOutputVariables			Number of output variables.
@@ -507,7 +533,24 @@ determineIndexRangeOfSelectedOutputs(
 	size_t *                        pointerToOutputSelectUpperBound);
 
 /**
+ *	@brief	Check if a single output is selected and that output is a scalar.
+ *
+ *	@param	arguments			Pointer to the common command-line arguments struct.
+ *	@param	outputVariableTypes		Array of output variable types. May be `NULL`, in which case all
+ *						outputs are distributions.
+ *	@param	numberOfOutputVariables		Number of output variables.
+ *	@return					`true` if the selected output is a scalar, `false` otherwise
+ */
+bool
+isSelectedOutputScalar(
+	const CommonCommandLineArguments *  arguments,
+	const kOutputVariableTypeIndex *    outputVariableTypes,
+	size_t                              numberOfOutputVariables);
+
+/**
  *	@brief	Print human-consumable output for selected output variables.
+ *		In Monte Carlo mode, scalar outputs are printed as a single value from `outputVariables`.
+ *		In Monte Carlo mode, calls `fatal()` if all outputs are selected and more than one is a distribution.
  *
  *	@param	arguments			Pointer to the common command-line arguments struct.
  *	@param	numberOfOutputVariables		Number of output variables.
@@ -515,16 +558,19 @@ determineIndexRangeOfSelectedOutputs(
  *	@param	outputVariableNames		Array of output variable name strings.
  *	@param	outputVariableDescriptions	Array of output variable description strings.
  *	@param	monteCarloOutputSamples		Array of Monte Carlo output samples.
+ *	@param	outputVariableTypes		Array of output variable types. May be `NULL`, in which case all
+ *						outputs are distributions.
  *	@return	void
  */
 void
 printHumanConsumableOutput(
-	CommonCommandLineArguments *    arguments,
-	size_t                          numberOfOutputVariables,
-	double *                        outputVariables,
-	const char *                    outputVariableNames[],
-	const char *                    outputVariableDescriptions[],
-	double *                        monteCarloOutputSamples);
+	CommonCommandLineArguments *        arguments,
+	size_t                              numberOfOutputVariables,
+	double *                            outputVariables,
+	const char *                        outputVariableNames[],
+	const char *                        outputVariableDescriptions[],
+	double *                            monteCarloOutputSamples,
+	const kOutputVariableTypeIndex *    outputVariableTypes);
 
 /**
  *	@brief	Populates a JSONVariable struct with values for JSON output.
@@ -546,6 +592,8 @@ populateJSONVariableStruct(
 /**
  *	@brief	Prints output distributions in JSON format based on command-line arguments.
  *		Will either print a single value or all values based on outputSelect.
+ *		In Monte Carlo mode, scalar outputs are printed as a single value from `outputVariables`.
+ *		In Monte Carlo mode, calls `fatal()` if all outputs are selected and more than one is a distribution.
  *
  *	@param	arguments			Common command-line arguments.
  *	@param	monteCarloOutputSamples		Array of Monte Carlo output samples.
@@ -553,15 +601,18 @@ populateJSONVariableStruct(
  *	@param	outputVariableDescriptions	Array of description strings for each output.
  *	@param	numberOfOutputVariables		Maximum number of output variables.
  *	@param	description			Description string for the JSON output.
+ *	@param	outputVariableTypes		Array of output variable types. May be `NULL`, in which case all
+ *						outputs are distributions.
  */
 void
 printJSONFormattedOutput(
-	CommonCommandLineArguments *    arguments,
-	double *                        monteCarloOutputSamples,
-	double *                        outputVariables,
-	const char * *                  outputVariableDescriptions,
-	size_t                          numberOfOutputVariables,
-	const char *                    description);
+	CommonCommandLineArguments *        arguments,
+	double *                            monteCarloOutputSamples,
+	double *                            outputVariables,
+	const char * *                      outputVariableDescriptions,
+	size_t                              numberOfOutputVariables,
+	const char *                        description,
+	const kOutputVariableTypeIndex *    outputVariableTypes);
 
 #ifdef __cplusplus
 } /* extern "C" */
