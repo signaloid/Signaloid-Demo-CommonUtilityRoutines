@@ -36,14 +36,15 @@
 #include "common.h"
 
 #ifdef NO_OS_AVAILABLE
+ #include "simulation_common.h"
 enum
 {
-	kCommonConstantMaxCharsPerPrintMessage = 256,
+	kCommonConstantMaxCharsPerPrintMessage = 4128, /* Sized for maximum byte array of TTR256 */
 };
 #endif
 
 /**
- *	@brief	Read data from a CSV file. Data entries are wither numbers or Ux-values.
+ *	@brief	Read data from a CSV file. Data entries are either numbers or Ux-values.
  *
  *	@param	inputFilePath		path to CSV file to read from
  *	@param	expectedHeaders		array of headers that should be in the CSV data
@@ -63,7 +64,7 @@ readInputDistributionsFromCSV(
 /**
  *	@brief	Write Ux-valued data variables to a CSV file.
  *
- *	@param	outputFilePath			path prefix for the output CSV file to write to
+ *	@param	outputFilePath			path to the output CSV file to write to
  *	@param	outputVariables			array of output distributions whose Ux representations we will write to the output CSV
  *	@param	outputVariablesType		specifies whether output data are single-precision or double-precision floating-point values
  *	@param	outputVariableNames		names of output distributions whose Ux representations we will write to the output CSV
@@ -87,6 +88,8 @@ void
 doNotOptimize(void * value)
 {
 	__asm__ volatile ("" : : "g" (value) : "memory");
+
+	return;
 }
 
 void
@@ -102,17 +105,20 @@ fatal(const char * fmt, ...)
 	exit(EXIT_FAILURE);
 }
 
-CommonConstantReturnType
-parseIntChecked(const char * str, int *  out)
+/*
+ *	Parse an integer at the start of `str` and set `*end` to the first character after it.
+ */
+static CommonConstantReturnType
+parseIntAndFindEnd(const char * str, int *  out, char * *  end)
 {
 	assert(str != NULL);
 	assert(out != NULL);
+	assert(end != NULL);
 
-	char *  end = NULL;
-	long    tmp = 0;
+	long tmp = 0;
 
 	errno   = 0;
-	tmp     = strtol(str, &end, 10);
+	tmp     = strtol(str, end, 10);
 
 	if (errno == ERANGE)
 	{
@@ -122,7 +128,7 @@ parseIntChecked(const char * str, int *  out)
 		return kCommonConstantReturnTypeError;
 	}
 
-	if (end == str)
+	if (*end == str)
 	{
 		/*
 		 *	No integer found in `str`.
@@ -144,6 +150,14 @@ parseIntChecked(const char * str, int *  out)
 }
 
 CommonConstantReturnType
+parseIntChecked(const char * str, int *  out)
+{
+	char * end = NULL;
+
+	return parseIntAndFindEnd(str, out, &end);
+}
+
+CommonConstantReturnType
 parseFloatChecked(const char * str, float *  out)
 {
 	assert(str != NULL);
@@ -155,10 +169,11 @@ parseFloatChecked(const char * str, float *  out)
 	errno   = 0;
 	tmp     = strtof(str, &end);
 
-	if (errno == ERANGE)
+	if ((errno == ERANGE) && isinf(tmp))
 	{
 		/*
-		 *	There was an double but it was out of range.
+		 *	There was a number but it overflowed. Underflow also sets ERANGE, but the result
+		 *	(a subnormal number or zero) is the closest representable value, so it is accepted.
 		 */
 		return kCommonConstantReturnTypeError;
 	}
@@ -188,10 +203,11 @@ parseDoubleChecked(const char * str, double *  out)
 	errno   = 0;
 	tmp     = strtod(str, &end);
 
-	if (errno == ERANGE)
+	if ((errno == ERANGE) && isinf(tmp))
 	{
 		/*
-		 *	There was an double but it was out of range.
+		 *	There was a number but it overflowed. Underflow also sets ERANGE, but the result
+		 *	(a subnormal number or zero) is the closest representable value, so it is accepted.
 		 */
 		return kCommonConstantReturnTypeError;
 	}
@@ -218,6 +234,126 @@ safeIsspace(char t)
 	return isspace((unsigned char) t);
 }
 
+/*
+ *	Like `parseIntChecked`, but rejects trailing characters other than whitespace.
+ *	For example "1e6" and "3abc" are errors rather than 1 and 3.
+ */
+static CommonConstantReturnType
+parseWholeIntChecked(const char * str, int *  out)
+{
+	char * end = NULL;
+
+	if (parseIntAndFindEnd(str, out, &end) != kCommonConstantReturnTypeSuccess)
+	{
+		return kCommonConstantReturnTypeError;
+	}
+
+	while (safeIsspace(*end))
+	{
+		end++;
+	}
+
+	return (*end == '\0') ? kCommonConstantReturnTypeSuccess : kCommonConstantReturnTypeError;
+}
+
+/*
+ *	Reads one line of `fp` into `buffer` and drops the newline. A final line without a newline is
+ *	read the same way. Sets `*endOfFile` if there are no more lines.
+ *
+ *	Unlike `fgets`, this counts the bytes it reads. So it finds a NUL character anywhere in the
+ *	line, including in a final line without a newline. Returns `kCommonConstantReturnTypeError`
+ *	if the line holds a NUL character or does not fit in `buffer`.
+ */
+static CommonConstantReturnType
+readCSVLine(FILE * fp, char *  buffer, size_t bufferSize, bool *  endOfFile)
+{
+	size_t  lineLength  = 0;
+	int     character   = fgetc(fp);
+
+	*endOfFile = (character == EOF);
+
+	while ((character != EOF) && (character != '\n'))
+	{
+		if (character == '\0')
+		{
+			fprintf(stderr, "Error: A line of the input CSV file contains a NUL character.\n");
+
+			return kCommonConstantReturnTypeError;
+		}
+
+		if (lineLength == bufferSize - 1)
+		{
+			fprintf(
+				stderr,
+				"Error: A line of the input CSV file is longer than the maximum "
+				"of %zu characters.\n",
+				bufferSize - 1
+			);
+
+			return kCommonConstantReturnTypeError;
+		}
+
+		buffer[lineLength] = (char) character;
+		lineLength++;
+		character = fgetc(fp);
+	}
+
+	buffer[lineLength] = '\0';
+
+	return kCommonConstantReturnTypeSuccess;
+}
+
+/*
+ *	Like `strtok_r(..., ",", ...)`, but keeps empty fields, so "a,,b" gives "a", "" and "b".
+ *	Returns `NULL` once all fields have been returned.
+ */
+static char *
+nextCSVField(char * * cursor)
+{
+	char * field = *cursor;
+
+	if (field == NULL)
+	{
+		return NULL;
+	}
+
+	char * comma = strchr(field, ',');
+
+	if (comma == NULL)
+	{
+		*cursor = NULL;
+	}
+	else
+	{
+		*comma  = '\0';
+		*cursor = comma + 1;
+	}
+
+	return field;
+}
+
+/*
+ *	A CSV entry of '-', optionally followed by whitespace, marks a missing value.
+ */
+static bool
+isMissingCSVEntry(const char * token)
+{
+	if (token[0] != '-')
+	{
+		return false;
+	}
+
+	for (size_t ii = 1; token[ii] != '\0'; ii++)
+	{
+		if (!safeIsspace(token[ii]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static CommonConstantReturnType
 validateInputDistributionCSVHeader(
 	char *              actualHeaderRow,
@@ -227,9 +363,9 @@ validateInputDistributionCSVHeader(
 	assert(actualHeaderRow != NULL);
 	assert(expectedHeaders != NULL);
 
-	char *  strtokState;
+	char *  cursor      = actualHeaderRow;
 	size_t  columnCount = 0;
-	char *  token       = strtok_r(actualHeaderRow, ",", &strtokState);
+	char *  token       = nextCSVField(&cursor);
 
 	while (token)
 	{
@@ -284,7 +420,8 @@ validateInputDistributionCSVHeader(
 				{
 					fprintf(
 						stderr,
-						"Error: Column %zu of the input CSV should have header '%s' but has header '%s' (trailing characters)\n",
+						"Error: Column %zu of the input CSV should have header '%s' "
+						"but has header '%s' (trailing characters)\n",
 						columnCount,
 						expectedHeaders[columnCount],
 						token
@@ -295,7 +432,7 @@ validateInputDistributionCSVHeader(
 			}
 		}
 
-		token = strtok_r(NULL, ",", &strtokState);
+		token = nextCSVField(&cursor);
 		columnCount++;
 	}
 
@@ -363,16 +500,16 @@ readInputDistributionsFromCSV(
 	double * *                  inputDoubleSampleValues     = NULL;
 	float *                     inputFloatDistributions     = NULL;
 	double *                    inputDoubleDistributions    = NULL;
-	char *                      buffer = NULL;
-	char *                      token;
-	char *                      strtokState;
-	int64_t                     rowCount = -1;
-	size_t                      columnCount;
-	size_t *                    sampleCounts    = NULL;
-	bool *                      uxColumns       = NULL;
-	FILE *                      fp              = NULL;
-	float                       parsedFloatValue;
-	double                      parsedDoubleValue;
+	char *                      buffer              = NULL;
+	char *                      token               = NULL;
+	char *                      cursor              = NULL;
+	int64_t                     rowCount            = -1;
+	size_t                      columnCount         = 0;
+	size_t *                    sampleCounts        = NULL;
+	bool *                      uxColumns           = NULL;
+	FILE *                      fp                  = NULL;
+	float                       parsedFloatValue    = 0;
+	double                      parsedDoubleValue   = 0;
 
 	switch (inputDistributionsType)
 	{
@@ -380,11 +517,16 @@ readInputDistributionsFromCSV(
 		{
 			inputFloatDistributions = (float *) inputDistributions;
 
-			inputFloatSampleValues = (float * *) checkedCalloc(numberOfDistributions, sizeof(double *), __FILE__, __LINE__);
+			inputFloatSampleValues = (float * *) checkedCalloc(numberOfDistributions, sizeof(float *), __FILE__, __LINE__);
 
 			for (size_t ii = 0; ii < numberOfDistributions; ii++)
 			{
-				inputFloatSampleValues[ii] = (float *) checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(float), __FILE__, __LINE__);
+				inputFloatSampleValues[ii] = (float *) checkedCalloc(
+					kCommonConstantMaxNumberOfInputSamples,
+					sizeof(float),
+					__FILE__,
+					__LINE__
+				);
 			}
 
 			break;
@@ -398,7 +540,12 @@ readInputDistributionsFromCSV(
 
 			for (size_t ii = 0; ii < numberOfDistributions; ii++)
 			{
-				inputDoubleSampleValues[ii] = (double *) checkedCalloc(kCommonConstantMaxNumberOfInputSamples, sizeof(double), __FILE__, __LINE__);
+				inputDoubleSampleValues[ii] = (double *) checkedCalloc(
+					kCommonConstantMaxNumberOfInputSamples,
+					sizeof(double),
+					__FILE__,
+					__LINE__
+				);
 			}
 
 			break;
@@ -444,14 +591,48 @@ readInputDistributionsFromCSV(
 	/*
 	 *	Read the lines into buffer.
 	 */
-	while (fgets(buffer, kCommonConstantMaxCharsPerLine, fp))
+	while (true)
 	{
+		bool endOfFile = false;
+
+		if (readCSVLine(fp, buffer, kCommonConstantMaxCharsPerLine, &endOfFile) != kCommonConstantReturnTypeSuccess)
+		{
+			returnCode = kCommonConstantReturnTypeError;
+			goto cleanup;
+		}
+
+		if (endOfFile)
+		{
+			break;
+		}
+
+		/*
+		 *	Skip blank lines, such as an empty line at the end of the file.
+		 */
+		if (buffer[strspn(buffer, " \t\r\n\v\f")] == '\0')
+		{
+			continue;
+		}
+
 		/*
 		 *	Validate the row containing field/column names.
 		 */
 		if (rowCount == -1)
 		{
-			if (validateInputDistributionCSVHeader(buffer, expectedHeaders, numberOfDistributions) != 0)
+			/*
+			 *	Skip a UTF-8 byte order mark, which some tools (e.g. Excel) write at the start
+			 *	of the file.
+			 */
+			const char *    byteOrderMark       = "\xEF\xBB\xBF";
+			const size_t    byteOrderMarkLength = strlen(byteOrderMark);
+			char *          headerRow           = buffer;
+
+			if (strncmp(headerRow, byteOrderMark, byteOrderMarkLength) == 0)
+			{
+				headerRow += byteOrderMarkLength;
+			}
+
+			if (validateInputDistributionCSVHeader(headerRow, expectedHeaders, numberOfDistributions) != 0)
 			{
 				returnCode = kCommonConstantReturnTypeError;
 				goto cleanup;
@@ -474,7 +655,8 @@ readInputDistributionsFromCSV(
 
 		columnCount = 0;
 
-		token = strtok_r(buffer, ",", &strtokState);
+		cursor  = buffer;
+		token   = nextCSVField(&cursor);
 
 		while (token)
 		{
@@ -499,33 +681,48 @@ readInputDistributionsFromCSV(
 				goto cleanup;
 			}
 
+			const bool shouldIgnore = isMissingCSVEntry(token);
+
+			/*
+			 *	A Ux value column holds its Ux value in data row 0 and '-' in all later rows.
+			 */
+			if (uxColumns[columnCount] && !shouldIgnore)
+			{
+				fprintf(
+					stderr,
+					"Error: The input CSV data at row %" PRId64 " and column %zu should be '-' "
+					"because the column holds a Ux value (was '%s').\n",
+					rowCount,
+					columnCount,
+					token
+				);
+
+				returnCode = kCommonConstantReturnTypeError;
+				goto cleanup;
+			}
+
 			/*
 			 *	Only parse this value if this is not a Ux value column.
 			 */
 			if (!uxColumns[columnCount])
 			{
-				if ((rowCount == 0) && (strstr(token, "Ux") != NULL))
+				if (strstr(token, "Ux") != NULL)
 				{
-					uxColumns[columnCount] = true;
-				}
-
-				bool shouldIgnore = false;
-
-				if (token[0] == '-')
-				{
-					for (size_t ii = 1; true; ii++)
+					if (rowCount != 0)
 					{
-						if (token[ii] == '\0')
-						{
-							shouldIgnore = true;
-							break;
-						}
+						fprintf(
+							stderr,
+							"Error: The input CSV data at row %" PRId64 " and column %zu "
+							"is a Ux value. Ux values are only allowed in data row 0.\n",
+							rowCount,
+							columnCount
+						);
 
-						if (!safeIsspace(token[ii]))
-						{
-							break;
-						}
+						returnCode = kCommonConstantReturnTypeError;
+						goto cleanup;
 					}
+
+					uxColumns[columnCount] = true;
 				}
 
 				if (inputDistributionsType == kFloatingPointVariableTypeFloat)
@@ -541,7 +738,8 @@ readInputDistributionsFromCSV(
 					{
 						fprintf(
 							stderr,
-							"Error: The input CSV data at row %" PRId64 " and column %zu is not a valid number (was '%s').\n",
+							"Error: The input CSV data at row %" PRId64 " and column %zu "
+							"is not a valid number (was '%s').\n",
 							rowCount,
 							columnCount,
 							token
@@ -569,7 +767,8 @@ readInputDistributionsFromCSV(
 					{
 						fprintf(
 							stderr,
-							"Error: The input CSV data at row %" PRId64 " and column %zu is not a valid number (was '%s').\n",
+							"Error: The input CSV data at row %" PRId64 " and column %zu "
+							"is not a valid number (was '%s').\n",
 							rowCount,
 							columnCount,
 							token
@@ -586,7 +785,7 @@ readInputDistributionsFromCSV(
 				}
 			}
 
-			token = strtok_r(NULL, ",", &strtokState);
+			token = nextCSVField(&cursor);
 			columnCount++;
 		}
 
@@ -599,15 +798,39 @@ readInputDistributionsFromCSV(
 				rowCount
 			);
 
-			return kCommonConstantReturnTypeError;
+			returnCode = kCommonConstantReturnTypeError;
+			goto cleanup;
 		}
 
 		rowCount++;
 	}
 
-	if (fp != stdin)
+	/*
+	 *	An empty file never reaches the header validation above.
+	 */
+	if (rowCount == -1)
 	{
-		fclose(fp);
+		fprintf(stderr, "Error: The input CSV file %s is empty.\n", inputFilePath);
+		returnCode = kCommonConstantReturnTypeError;
+		goto cleanup;
+	}
+
+	/*
+	 *	Building a distribution from zero samples is undefined, so every column needs at least one value.
+	 */
+	for (size_t ii = 0; ii < numberOfDistributions; ii++)
+	{
+		if (sampleCounts[ii] == 0)
+		{
+			fprintf(
+				stderr,
+				"Error: The input CSV data has no values in column '%s'.\n",
+				expectedHeaders[ii]
+			);
+
+			returnCode = kCommonConstantReturnTypeError;
+			goto cleanup;
+		}
 	}
 
 	/*
@@ -645,6 +868,11 @@ readInputDistributionsFromCSV(
 	returnCode = kCommonConstantReturnTypeSuccess;
 
 cleanup:
+
+	if ((fp != NULL) && (fp != stdin))
+	{
+		fclose(fp);
+	}
 
 	free(buffer);
 
@@ -703,6 +931,30 @@ writeOutputDoubleDistributionsToCSV(
 		outputVariableNames,
 		numberOfOutputDistributions
 	);
+}
+
+/*
+ *	Flush `fp`, close it unless it is `stdout`, and report whether any write to it failed.
+ *	Failed writes set the stream's error indicator. Buffered data is only written out by `fflush` or `fclose`.
+ */
+static CommonConstantReturnType
+finishWritingFile(FILE * fp, const char * filePath)
+{
+	bool writeFailed = (fflush(fp) != 0) || (ferror(fp) != 0);
+
+	if ((fp != stdout) && (fclose(fp) != 0))
+	{
+		writeFailed = true;
+	}
+
+	if (writeFailed)
+	{
+		fprintf(stderr, "Error: Could not write to %s.\n", filePath);
+
+		return kCommonConstantReturnTypeError;
+	}
+
+	return kCommonConstantReturnTypeSuccess;
 }
 
 CommonConstantReturnType
@@ -789,12 +1041,7 @@ writeOutputDistributionsToCSV(
 	}
 	fprintf(fp, "\n");
 
-	if (fp != stdout)
-	{
-		fclose(fp);
-	}
-
-	return kCommonConstantReturnTypeSuccess;
+	return finishWritingFile(fp, outputFilePath);
 }
 
 /*
@@ -845,6 +1092,8 @@ printJSONEscapedString(const char * s)
 			}
 		}
 	}
+
+	return;
 }
 
 void
@@ -1125,14 +1374,61 @@ populateJSONVariableStruct(
 	return;
 }
 
+/*
+ *	A `NULL` `outputVariableTypes` means all outputs are distributions.
+ */
+static bool
+isOutputVariableScalar(const kOutputVariableTypeIndex * outputVariableTypes, size_t outputIndex)
+{
+	return (outputVariableTypes != NULL) && (outputVariableTypes[outputIndex] == kOutputVariableTypeScalar);
+}
+
+/*
+ *	In Monte Carlo mode, `monteCarloOutputSamples` holds the samples of one output only.
+ *	So when all outputs are selected, at most one of them may be a distribution.
+ */
+static void
+checkMonteCarloOutputSelection(
+	const CommonCommandLineArguments *  arguments,
+	const kOutputVariableTypeIndex *    outputVariableTypes,
+	size_t                              numberOfOutputVariables)
+{
+	size_t numberOfDistributionOutputs = 0;
+
+	if (!arguments->isMonteCarloMode || (arguments->outputSelect != numberOfOutputVariables))
+	{
+		return;
+	}
+
+	for (size_t ii = 0; ii < numberOfOutputVariables; ii++)
+	{
+		if (!isOutputVariableScalar(outputVariableTypes, ii))
+		{
+			numberOfDistributionOutputs++;
+		}
+	}
+
+	if (numberOfDistributionOutputs > 1)
+	{
+		fatal(
+			"Error: Monte Carlo mode cannot print %zu distribution outputs at once. "
+			"Please select a single output (-S option).",
+			numberOfDistributionOutputs
+		);
+	}
+
+	return;
+}
+
 void
 printJSONFormattedOutput(
-	CommonCommandLineArguments *    arguments,
-	double *                        monteCarloOutputSamples,
-	double *                        outputVariables,
-	const char * *                  outputVariableDescriptions,
-	size_t                          numberOfOutputVariables,
-	const char *                    description)
+	CommonCommandLineArguments *        arguments,
+	double *                            monteCarloOutputSamples,
+	double *                            outputVariables,
+	const char * *                      outputVariableDescriptions,
+	size_t                              numberOfOutputVariables,
+	const char *                        description,
+	const kOutputVariableTypeIndex *    outputVariableTypes)
 {
 	JSONVariable * jsonVariables = (JSONVariable *) checkedCalloc(
 		numberOfOutputVariables,
@@ -1150,23 +1446,31 @@ printJSONFormattedOutput(
 		&outputSelectLowerBound,
 		&outputSelectUpperBound
 	);
+	checkMonteCarloOutputSelection(arguments, outputVariableTypes, numberOfOutputVariables);
 
 	for (outputSelect = outputSelectLowerBound; outputSelect < outputSelectUpperBound; outputSelect++)
 	{
 		/*
-		 *	If in Monte Carlo mode, `pointerToOutputVariable` points to the beginning of the `monteCarloOutputSamples` array.
-		 *	In this case, `arguments->numberOfMonteCarloIterations` is the length of the `monteCarloOutputSamples` array.
-		 *	Else, it points to the entry of the `outputVariables` to be used.
-		 *	In this case, `arguments->numberOfMonteCarloIterations` equals 1.
+		 *	If in Monte Carlo mode and the output is not a scalar, `pointerToOutputVariable` points to the
+		 *	beginning of the `monteCarloOutputSamples` array, which has length
+		 *	`arguments->numberOfMonteCarloIterations`. Else, it points to the single entry of the
+		 *	`outputVariables` to be used.
 		 */
-		double * pointerToOutputVariable = arguments->isMonteCarloMode ? monteCarloOutputSamples : &outputVariables[outputSelect];
+		const bool  isOutputScalar          = isOutputVariableScalar(outputVariableTypes, outputSelect);
+		const bool  isOutputMonteCarlo      = arguments->isMonteCarloMode && !isOutputScalar;
+		double *    pointerToOutputVariable = &outputVariables[outputSelect];
+
+		if (isOutputMonteCarlo)
+		{
+			pointerToOutputVariable = monteCarloOutputSamples;
+		}
 
 		populateJSONVariableStruct(
 			&jsonVariables[outputSelect],
 			pointerToOutputVariable,
 			outputVariableDescriptions[outputSelect],
 			outputSelect,
-			arguments->numberOfMonteCarloIterations
+			isOutputMonteCarlo ? arguments->numberOfMonteCarloIterations : 1
 		);
 	}
 
@@ -1232,9 +1536,10 @@ getOptIsNewlib(void)
  *	> can introduce long options as well as `--'.
  *
  *	We work around this inconsistency by transforming options before `getopt_long_only` parses
- *	them to convert a single leading '-' into a '+'
+ *	them to convert a single leading '-' into a '+'. Returns the string it changed (or `NULL`),
+ *	so the caller can change it back after parsing.
  */
-static void
+static char *
 modifyNextArgvForNewLibc(char *const argv[])
 {
 	if (getOptIsNewlib())
@@ -1244,10 +1549,12 @@ modifyNextArgvForNewLibc(char *const argv[])
 		if ((arg != NULL) && (arg[0] == '-') && (arg[1] != '-'))
 		{
 			arg[0] = '+';
+
+			return arg;
 		}
 	}
 
-	return;
+	return NULL;
 }
 
 static void
@@ -1267,8 +1574,8 @@ checkDuplicates(
 	return;
 }
 
-static struct option *
-constructlongOptions(
+static void
+constructLongOptions(
 	DemoOption *    demoOpts,
 	size_t          demoOptsSize,
 	struct option * optionsOut,
@@ -1288,7 +1595,7 @@ constructlongOptions(
 	for (size_t ii = 0; ii < demoOptsSize; ii++)
 	{
 		int hasArg  = demoOpts[ii].hasArg ? required_argument : no_argument;
-		int val     = ii;
+		int val     = (int) ii;
 
 		if ((demoOpts[ii].opt == NULL) && (demoOpts[ii].optAlternative == NULL))
 		{
@@ -1328,7 +1635,7 @@ constructlongOptions(
 	optionsOut[outIndex] = (struct option) { ZERO_STRUCT_INIT };
 	outIndex++;
 
-	return optionsOut;
+	return;
 }
 
 static CommonConstantReturnType
@@ -1367,7 +1674,7 @@ parseArgsCoreImplementation(
 	longOptionsSize = optionsSize * 2 + 1;
 	longOptions     = (struct option *) checkedCalloc(longOptionsSize, sizeof(struct option), __FILE__, __LINE__);
 
-	constructlongOptions(options, optionsSize, longOptions, longOptionsSize);
+	constructLongOptions(options, optionsSize, longOptions, longOptionsSize);
 
 	optind  = 0;
 	opterr  = 0;
@@ -1381,6 +1688,12 @@ parseArgsCoreImplementation(
 	 *	_current_ index being processed. This is very useful for error messages.
 	 */
 	previousOptInd = 1;
+
+	/*
+	 *	Strings changed by `modifyNextArgvForNewLibc`, to be changed back after parsing.
+	 */
+	char * *    modifiedArgs            = (char * *) checkedCalloc((size_t) argc, sizeof(char *), __FILE__, __LINE__);
+	size_t      numberOfModifiedArgs    = 0;
 
 	while (!error)
 	{
@@ -1396,8 +1709,41 @@ parseArgsCoreImplementation(
 		 *	like `-To` must be instead written `-T -o`. I think this is a fine
 		 *	compromise to make.
 		 */
-		modifyNextArgvForNewLibc(argv);
-		opt = getopt_long_only(argc, argv, ":", longOptions, &longIndex);
+		/*
+		 *	glibc, musl and newlib disagree on "--", on a lone "-" and on arguments that start
+		 *	with '+'. Handle them here, before `modifyNextArgvForNewLibc`, so that all behave like
+		 *	glibc. "--" ends the options. "-" and "+..." are non-option arguments, which also end
+		 *	the options.
+		 */
+		const int       nextIndex   = (optind == 0) ? 1 : optind;
+		const char *    nextArg     = (nextIndex < argc) ? argv[nextIndex] : NULL;
+
+		if ((nextArg != NULL) && (strcmp(nextArg, "--") == 0))
+		{
+			optind = nextIndex + 1;
+			break;
+		}
+
+		if ((nextArg != NULL) && ((strcmp(nextArg, "-") == 0) || (nextArg[0] == '+')))
+		{
+			optind = nextIndex;
+			break;
+		}
+
+		char * modifiedArg = modifyNextArgvForNewLibc(argv);
+
+		if (modifiedArg != NULL)
+		{
+			modifiedArgs[numberOfModifiedArgs] = modifiedArg;
+			numberOfModifiedArgs++;
+		}
+
+		/*
+		 *	The leading '+' stops parsing at the first non-option argument, on both glibc and newlib.
+		 *	Without it, both reorder `argv` differently, and `previousOptInd` would not point at the
+		 *	option being processed. Any non-option argument is an error anyway (see after the loop).
+		 */
+		opt = getopt_long_only(argc, argv, "+:", longOptions, &longIndex);
 
 		if (opt == -1)
 		{
@@ -1451,6 +1797,40 @@ parseArgsCoreImplementation(
 		assert(opt >= 0);
 		assert((size_t) opt < optionsSize);
 
+		/*
+		 *	`getopt_long_only` also accepts unique prefixes of option names (e.g. "-m" for "-M"'s long
+		 *	form), and newlib ignores "=value" on options without an argument. So check that the option
+		 *	being processed, `argv[previousOptInd]`, names the matched option exactly.
+		 */
+		const char *    optionName  = longOptions[longIndex].name;
+		const char *    optionText  = argv[previousOptInd] + strspn(argv[previousOptInd], "-+");
+		const size_t    nameLength  = strcspn(optionText, "=");
+		const bool      hasValue    = (optionText[nameLength] == '=');
+		const bool      isPrefix    = (strncmp(optionText, optionName, nameLength) == 0);
+		const bool      isExactName = isPrefix && (optionName[nameLength] == '\0');
+
+		if (!isExactName || (hasValue && !options[opt].hasArg))
+		{
+			fprintf(stderr, "Error: Invalid option: '-%s' provided.\n", argv[previousOptInd] + 1);
+			error = true;
+			break;
+		}
+
+		/*
+		 *	glibc and musl accept an empty value such as "-k=", but newlib reports it as missing.
+		 *	Treat it as missing everywhere.
+		 */
+		if (hasValue && (optionText[nameLength + 1] == '\0'))
+		{
+			fprintf(
+				stderr,
+				"Error: Option '-%s' is missing mandatory argument.\n",
+				argv[previousOptInd] + 1
+			);
+			error = true;
+			break;
+		}
+
 		if (options[opt].foundOpt != NULL)
 		{
 			*(options[opt].foundOpt) = true;
@@ -1478,11 +1858,41 @@ parseArgsCoreImplementation(
 		error = true;
 	}
 
+	/*
+	 *	Undo `modifyNextArgvForNewLibc`, so the caller's `argv` is unchanged.
+	 */
+	for (size_t ii = 0; ii < numberOfModifiedArgs; ii++)
+	{
+		modifiedArgs[ii][0] = '-';
+	}
+
+	free(modifiedArgs);
 	free(longOptions);
 
 	return error ? kCommonConstantReturnTypeError : kCommonConstantReturnTypeSuccess;
 }
 
+
+/*
+ *	Count the options before the terminating zero entry. A `NULL` `options` has no options.
+ */
+static size_t
+countDemoOptions(const DemoOption * options)
+{
+	size_t count = 0;
+
+	if (options == NULL)
+	{
+		return 0;
+	}
+
+	while ((options[count].opt != NULL) || (options[count].optAlternative != NULL))
+	{
+		count++;
+	}
+
+	return count;
+}
 
 static CommonConstantReturnType
 concatAndParseArgs(
@@ -1491,30 +1901,27 @@ concatAndParseArgs(
 	DemoOption *    demoSpecificOptions,
 	DemoOption *    commonOptions)
 {
-	size_t                      demoSpecificOptionsSize = 0;
-	size_t                      commonOptionsSize       = 0;
-	size_t                      concatOptionsSize;
-	DemoOption *                concatOptions = NULL;
-	CommonConstantReturnType    ret;
-
-	while ((demoSpecificOptions[demoSpecificOptionsSize].opt != NULL) || (demoSpecificOptions[demoSpecificOptionsSize].optAlternative != NULL))
-	{
-		demoSpecificOptionsSize++;
-	}
-
-	while ((commonOptions[commonOptionsSize].opt != NULL) || (commonOptions[commonOptionsSize].optAlternative != NULL))
-	{
-		commonOptionsSize++;
-	}
-
-	concatOptionsSize   = demoSpecificOptionsSize + commonOptionsSize;
-	concatOptions       = (DemoOption *) checkedCalloc(concatOptionsSize, sizeof(DemoOption), __FILE__, __LINE__);
-
-	memcpy(
-		concatOptions,
-		demoSpecificOptions,
-		sizeof(DemoOption) * demoSpecificOptionsSize
+	const size_t    demoSpecificOptionsSize = countDemoOptions(demoSpecificOptions);
+	const size_t    commonOptionsSize       = countDemoOptions(commonOptions);
+	const size_t    concatOptionsSize       = demoSpecificOptionsSize + commonOptionsSize;
+	DemoOption *    concatOptions           = (DemoOption *) checkedCalloc(
+		concatOptionsSize,
+		sizeof(DemoOption),
+		__FILE__,
+		__LINE__
 	);
+
+	/*
+	 *	`memcpy` must not be passed a `NULL` source, even with a size of 0.
+	 */
+	if (demoSpecificOptionsSize > 0)
+	{
+		memcpy(
+			concatOptions,
+			demoSpecificOptions,
+			sizeof(DemoOption) * demoSpecificOptionsSize
+		);
+	}
 
 	memcpy(
 		concatOptions + demoSpecificOptionsSize,
@@ -1522,7 +1929,7 @@ concatAndParseArgs(
 		sizeof(DemoOption) * commonOptionsSize
 	);
 
-	ret = parseArgsCoreImplementation(argc, argv, concatOptions, concatOptionsSize);
+	const CommonConstantReturnType ret = parseArgsCoreImplementation(argc, argv, concatOptions, concatOptionsSize);
 
 	free(concatOptions);
 
@@ -1597,7 +2004,7 @@ parseArgs(
 	if (outputSelectArg != NULL)
 	{
 		int outputSelect;
-		int ret = parseIntChecked(outputSelectArg, &outputSelect);
+		int ret = parseWholeIntChecked(outputSelectArg, &outputSelect);
 
 		if (ret != kCommonConstantReturnTypeSuccess)
 		{
@@ -1621,7 +2028,7 @@ parseArgs(
 	if (multipleExecutionsArg != NULL)
 	{
 		int multipleExecutions;
-		int ret = parseIntChecked(multipleExecutionsArg, &multipleExecutions);
+		int ret = parseWholeIntChecked(multipleExecutionsArg, &multipleExecutions);
 
 		if (ret != kCommonConstantReturnTypeSuccess)
 		{
@@ -1666,8 +2073,10 @@ printCommonUsage(void)
 		stderr,
 		"\t[-i, --input <Path to input CSV file : str>] (Read inputs from file.)\n"
 		"\t[-o, --output <Path to output CSV file : str>] (Specify the output file.)\n"
-		"\t[-S, --select-output <output : int>] (Compute 0-indexed output, by default 0.)\n"
-		"\t[-M, --multiple-executions <Number of executions : int (Default: 1)>] (Repeated execute kernel for benchmarking.)\n"
+		"\t[-S, --select-output <output : int>] (Compute 0-indexed output, by default 0. "
+		"Set to the number of outputs to compute all outputs.)\n"
+		"\t[-M, --multiple-executions <Number of executions : int (Default: 1)>] "
+		"(Repeatedly execute kernel for benchmarking. Also enables timing.)\n"
 		"\t[-T, --time] (Timing mode: Times and prints the timing of the kernel execution.)\n"
 		"\t[-v, --verbose] (Verbose mode: Prints extra information about demo execution.)\n"
 		"\t[-b, --benchmarking] (Benchmarking mode: Generate outputs in format for benchmarking.)\n"
@@ -1683,24 +2092,36 @@ calculateMeanAndVarianceOfFloatSamples(
 	const float *   dataArray,
 	size_t          dataArraySize)
 {
-	float   mean;
-	float   variance;
-	float   sum             = 0;
-	float   sumOfSquares    = 0;
+	if (dataArraySize == 0)
+	{
+		fatal("Error: Cannot compute mean and variance of 0 samples.");
+	}
+
+	double  sum = 0;
+	double  sumOfSquaredDeviations = 0;
 
 	for (size_t ii = 0; ii < dataArraySize; ii++)
 	{
-		sum             += dataArray[ii];
-		sumOfSquares    += dataArray[ii] * dataArray[ii];
+		sum += dataArray[ii];
 	}
 
-	mean        = sum / dataArraySize;
-	variance    = sumOfSquares / dataArraySize - (mean * mean);
+	/*
+	 *	Summing squared deviations from the mean in a second pass avoids the cancellation in
+	 *	E[x^2] - E[x]^2, which can give a negative variance.
+	 */
+	const double mean = sum / dataArraySize;
+
+	for (size_t ii = 0; ii < dataArraySize; ii++)
+	{
+		const double deviation = dataArray[ii] - mean;
+
+		sumOfSquaredDeviations += deviation * deviation;
+	}
 
 	return (MeanAndVariance)
 		   {
-			   .mean        = (double) mean,
-			   .variance    = (double) variance,
+			   .mean        = mean,
+			   .variance    = sumOfSquaredDeviations / dataArraySize,
 		   };
 }
 
@@ -1709,41 +2130,55 @@ calculateMeanAndVarianceOfDoubleSamples(
 	const double *  dataArray,
 	size_t          dataArraySize)
 {
-	double  mean;
-	double  variance;
-	double  sum             = 0;
-	double  sumOfSquares    = 0;
+	if (dataArraySize == 0)
+	{
+		fatal("Error: Cannot compute mean and variance of 0 samples.");
+	}
+
+	double  sum = 0;
+	double  sumOfSquaredDeviations = 0;
 
 	for (size_t ii = 0; ii < dataArraySize; ii++)
 	{
-		sum             += dataArray[ii];
-		sumOfSquares    += dataArray[ii] * dataArray[ii];
+		sum += dataArray[ii];
 	}
 
-	mean        = sum / dataArraySize;
-	variance    = sumOfSquares / dataArraySize - (mean * mean);
+	/*
+	 *	Summing squared deviations from the mean in a second pass avoids the cancellation in
+	 *	E[x^2] - E[x]^2, which can give a negative variance.
+	 */
+	const double mean = sum / dataArraySize;
+
+	for (size_t ii = 0; ii < dataArraySize; ii++)
+	{
+		const double deviation = dataArray[ii] - mean;
+
+		sumOfSquaredDeviations += deviation * deviation;
+	}
 
 	return (MeanAndVariance)
 		   {
 			   .mean        = mean,
-			   .variance    = variance,
+			   .variance    = sumOfSquaredDeviations / dataArraySize,
 		   };
 }
 
 static int
 compareFloats(const void * a, const void * b)
 {
-	float diff = *(const float *) a - *(const float *) b;
+	const float first   = *(const float *) a;
+	const float second  = *(const float *) b;
 
-	return ((int) (diff > 0)) - ((int) (diff < 0));
+	return ((int) (first > second)) - ((int) (first < second));
 }
 
 static int
 compareDoubles(const void * a, const void * b)
 {
-	double diff = *(const double *) a - *(const double *) b;
+	const double    first   = *(const double *) a;
+	const double    second  = *(const double *) b;
 
-	return ((int) (diff > 0)) - ((int) (diff < 0));
+	return ((int) (first > second)) - ((int) (first < second));
 }
 
 float
@@ -1752,8 +2187,29 @@ calculatePercentageQuantileOfFloatSamples(
 	float           quantilePercentage,
 	size_t          dataArraySize)
 {
-	int     index;
-	float   quantile;
+	/*
+	 *	A quantile needs at least one sample and a `quantilePercentage` in [0, 1]. This also rejects NaN.
+	 */
+	if ((dataArraySize == 0) || !((quantilePercentage >= 0) && (quantilePercentage <= 1)))
+	{
+		fatal(
+			"Error: Cannot compute quantile %f of %zu samples. "
+			"The quantile must be in [0, 1] and there must be at least one sample.",
+			(double) quantilePercentage,
+			dataArraySize
+		);
+	}
+
+	/*
+	 *	NaN samples have no order, so `qsort` cannot sort them.
+	 */
+	for (size_t ii = 0; ii < dataArraySize; ii++)
+	{
+		if (isnan(dataArray[ii]))
+		{
+			fatal("Error: Cannot compute quantile. Sample %zu is NaN.", ii);
+		}
+	}
 
 	/*
 	 *	Make a copy for sorting.
@@ -1767,19 +2223,25 @@ calculatePercentageQuantileOfFloatSamples(
 	memcpy(dataArrayCopy, dataArray, dataArraySize * sizeof(float));
 
 	/*
-	 *	Sort samples (modifies original array).
+	 *	Sort the copy. `dataArray` is not modified.
 	 */
 	qsort(dataArrayCopy, dataArraySize, sizeof(float), compareFloats);
 
 	/*
-	 *	Determine the relevant index.
+	 *	Determine the relevant index. A quantile of 1, or rounding up, maps to the last sample.
 	 */
-	index = (int) (quantilePercentage * dataArraySize);
+	size_t index = (size_t) (quantilePercentage * dataArraySize);
+
+	if (index >= dataArraySize)
+	{
+		index = dataArraySize - 1;
+	}
 
 	/*
 	 *	Return the value at that index.
 	 */
-	quantile = dataArrayCopy[index];
+	const float quantile = dataArrayCopy[index];
+
 	free(dataArrayCopy);
 
 	return quantile;
@@ -1791,8 +2253,29 @@ calculatePercentageQuantileOfDoubleSamples(
 	double          quantilePercentage,
 	size_t          dataArraySize)
 {
-	int     index;
-	double  quantile;
+	/*
+	 *	A quantile needs at least one sample and a `quantilePercentage` in [0, 1]. This also rejects NaN.
+	 */
+	if ((dataArraySize == 0) || !((quantilePercentage >= 0) && (quantilePercentage <= 1)))
+	{
+		fatal(
+			"Error: Cannot compute quantile %f of %zu samples. "
+			"The quantile must be in [0, 1] and there must be at least one sample.",
+			(double) quantilePercentage,
+			dataArraySize
+		);
+	}
+
+	/*
+	 *	NaN samples have no order, so `qsort` cannot sort them.
+	 */
+	for (size_t ii = 0; ii < dataArraySize; ii++)
+	{
+		if (isnan(dataArray[ii]))
+		{
+			fatal("Error: Cannot compute quantile. Sample %zu is NaN.", ii);
+		}
+	}
 
 	/*
 	 *	Make a copy for sorting.
@@ -1806,19 +2289,25 @@ calculatePercentageQuantileOfDoubleSamples(
 	memcpy(dataArrayCopy, dataArray, dataArraySize * sizeof(double));
 
 	/*
-	 *	Sort samples (modifies original array).
+	 *	Sort the copy. `dataArray` is not modified.
 	 */
 	qsort(dataArrayCopy, dataArraySize, sizeof(double), compareDoubles);
 
 	/*
-	 *	Determine the relevant index.
+	 *	Determine the relevant index. A quantile of 1, or rounding up, maps to the last sample.
 	 */
-	index = (int) (quantilePercentage * dataArraySize);
+	size_t index = (size_t) (quantilePercentage * dataArraySize);
+
+	if (index >= dataArraySize)
+	{
+		index = dataArraySize - 1;
+	}
 
 	/*
 	 *	Return the value at that index.
 	 */
-	quantile = dataArrayCopy[index];
+	const double quantile = dataArrayCopy[index];
+
 	free(dataArrayCopy);
 
 	return quantile;
@@ -1832,21 +2321,36 @@ calculateMeanAndVarianceOfMultiDimensionalFloatSamples(
 	float *     meanValueArray,
 	float *     varianceArray)
 {
+	if (dataArrayRows == 0)
+	{
+		fatal("Error: Cannot compute mean and variance of 0 samples.");
+	}
+
 	for (size_t jj = 0; jj < dataArrayColumns; jj++)
 	{
-		float   sum             = 0;
-		float   sumOfSquares    = 0;
-		float   meanValue;
+		double  sum = 0;
+		double  sumOfSquaredDeviations = 0;
 
 		for (size_t ii = 0; ii < dataArrayRows; ii++)
 		{
-			sum             += dataArray[ii][jj];
-			sumOfSquares    += dataArray[ii][jj] * dataArray[ii][jj];
+			sum += dataArray[ii][jj];
 		}
 
-		meanValue           = sum / dataArrayRows;
-		meanValueArray[jj]  = meanValue;
-		varianceArray[jj]   = sumOfSquares / dataArrayRows - (meanValue * meanValue);
+		/*
+		 *	Summing squared deviations from the mean in a second pass avoids the cancellation in
+		 *	E[x^2] - E[x]^2, which can give a negative variance.
+		 */
+		const double mean = sum / dataArrayRows;
+
+		for (size_t ii = 0; ii < dataArrayRows; ii++)
+		{
+			const double deviation = dataArray[ii][jj] - mean;
+
+			sumOfSquaredDeviations += deviation * deviation;
+		}
+
+		meanValueArray[jj]  = (float) mean;
+		varianceArray[jj]   = (float) (sumOfSquaredDeviations / dataArrayRows);
 	}
 
 	return;
@@ -1860,19 +2364,36 @@ calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
 	double *    meanValueArray,
 	double *    varianceArray)
 {
+	if (dataArrayRows == 0)
+	{
+		fatal("Error: Cannot compute mean and variance of 0 samples.");
+	}
+
 	for (size_t jj = 0; jj < dataArrayColumns; jj++)
 	{
-		double  sum             = 0;
-		double  sumOfSquares    = 0;
+		double  sum = 0;
+		double  sumOfSquaredDeviations = 0;
 
 		for (size_t ii = 0; ii < dataArrayRows; ii++)
 		{
-			sum             += dataArray[ii][jj];
-			sumOfSquares    += dataArray[ii][jj] * dataArray[ii][jj];
+			sum += dataArray[ii][jj];
 		}
 
-		meanValueArray[jj]  = sum / dataArrayRows;
-		varianceArray[jj]   = sumOfSquares / dataArrayRows - (meanValueArray[jj] * meanValueArray[jj]);
+		/*
+		 *	Summing squared deviations from the mean in a second pass avoids the cancellation in
+		 *	E[x^2] - E[x]^2, which can give a negative variance.
+		 */
+		const double mean = sum / dataArrayRows;
+
+		for (size_t ii = 0; ii < dataArrayRows; ii++)
+		{
+			const double deviation = dataArray[ii][jj] - mean;
+
+			sumOfSquaredDeviations += deviation * deviation;
+		}
+
+		meanValueArray[jj]  = mean;
+		varianceArray[jj]   = sumOfSquaredDeviations / dataArrayRows;
 	}
 
 	return;
@@ -1880,7 +2401,7 @@ calculateMeanAndVarianceOfMultiDimensionalDoubleSamples(
 
 
 
-void
+CommonConstantReturnType
 saveMonteCarloFloatDataToDataDotOutFile(
 	const float *   benchmarkingDataSamples,
 	uint64_t        cpuTimeElapsedMicroSeconds,
@@ -1900,12 +2421,10 @@ saveMonteCarloFloatDataToDataDotOutFile(
 		fprintf(fp, "%.20f\n", benchmarkingDataSamples[ii]);
 	}
 
-	fclose(fp);
-
-	return;
+	return finishWritingFile(fp, "data.out");
 }
 
-void
+CommonConstantReturnType
 saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 	float * *   benchmarkingDataSamples,
 	uint64_t    cpuTimeElapsedMicroSeconds,
@@ -1942,12 +2461,10 @@ saveMonteCarloFloatMultidimensionalDataToDataDotOutFile(
 		}
 	}
 
-	fclose(fp);
-
-	return;
+	return finishWritingFile(fp, "data.out");
 }
 
-void
+CommonConstantReturnType
 saveMonteCarloDoubleDataToDataDotOutFile(
 	const double *  benchmarkingDataSamples,
 	uint64_t        cpuTimeElapsedMicroSeconds,
@@ -1967,12 +2484,10 @@ saveMonteCarloDoubleDataToDataDotOutFile(
 		fprintf(fp, "%.20lf\n", benchmarkingDataSamples[ii]);
 	}
 
-	fclose(fp);
-
-	return;
+	return finishWritingFile(fp, "data.out");
 }
 
-void
+CommonConstantReturnType
 saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 	double * *  benchmarkingDataSamples,
 	uint64_t    cpuTimeElapsedMicroSeconds,
@@ -2009,9 +2524,7 @@ saveMonteCarloDoubleMultidimensionalDataToDataDotOutFile(
 		}
 	}
 
-	fclose(fp);
-
-	return;
+	return finishWritingFile(fp, "data.out");
 }
 
 void *
@@ -2049,6 +2562,18 @@ determineIndexRangeOfSelectedOutputs(
 	size_t *                        pointerToOutputSelectUpperBound)
 {
 	/*
+	 *	Callers index output arrays with this range, so reject an out-of-range `outputSelect`.
+	 */
+	if (arguments->outputSelect > numberOfOutputVariables)
+	{
+		fatal(
+			"Error: Output select value (-S option) %zu is greater than the number of outputs %zu.",
+			arguments->outputSelect,
+			numberOfOutputVariables
+		);
+	}
+
+	/*
 	 *	If `outputSelect` is equal to `numberOfOutputVariables`, index range is the full range.
 	 */
 	if (arguments->outputSelect == numberOfOutputVariables)
@@ -2068,16 +2593,33 @@ determineIndexRangeOfSelectedOutputs(
 	return;
 }
 
+bool
+isSelectedOutputScalar(
+	const CommonCommandLineArguments *  arguments,
+	const kOutputVariableTypeIndex *    outputVariableTypes,
+	size_t                              numberOfOutputVariables)
+{
+	/*
+	 *	If all outputs are selected (`outputSelect` equals `numberOfOutputVariables`), there is no single
+	 *	selected output.
+	 */
+	if (arguments->outputSelect >= numberOfOutputVariables)
+	{
+		return false;
+	}
 
+	return isOutputVariableScalar(outputVariableTypes, arguments->outputSelect);
+}
 
 void
 printHumanConsumableOutput(
-	CommonCommandLineArguments *    arguments,
-	size_t                          numberOfOutputVariables,
-	double *                        outputVariables,
-	const char *                    outputVariableNames[],
-	const char *                    outputVariableDescriptions[],
-	double *                        monteCarloOutputSamples)
+	CommonCommandLineArguments *        arguments,
+	size_t                              numberOfOutputVariables,
+	double *                            outputVariables,
+	const char *                        outputVariableNames[],
+	const char *                        outputVariableDescriptions[],
+	double *                            monteCarloOutputSamples,
+	const kOutputVariableTypeIndex *    outputVariableTypes)
 {
 	size_t          outputSelectLowerBound;
 	size_t          outputSelectUpperBound;
@@ -2092,10 +2634,15 @@ printHumanConsumableOutput(
 		&outputSelectLowerBound,
 		&outputSelectUpperBound
 	);
+	checkMonteCarloOutputSelection(arguments, outputVariableTypes, numberOfOutputVariables);
 
 	for (outputSelect = outputSelectLowerBound; outputSelect < outputSelectUpperBound; outputSelect++)
 	{
-		if (arguments->isMonteCarloMode)
+		/*
+		 *	Scalar outputs have no Monte Carlo samples, so print them as a single value even in Monte Carlo
+		 *	mode.
+		 */
+		if (arguments->isMonteCarloMode && !isOutputVariableScalar(outputVariableTypes, outputSelect))
 		{
 			stats = calculateMeanAndVarianceOfDoubleSamples(
 				monteCarloOutputSamples,
@@ -2122,7 +2669,14 @@ printHumanConsumableOutput(
 			char    tempString[kCommonConstantMaxCharsPerPrintMessage];
 			int     written;
 
-			written = snprintf(tempString, kCommonConstantMaxCharsPerPrintMessage, "%s (%s):", outputVariableDescriptions[outputSelect], outputVariableNames[outputSelect]);
+			written = snprintf(
+				tempString,
+				kCommonConstantMaxCharsPerPrintMessage,
+				"%s (%s):",
+				outputVariableDescriptions[outputSelect],
+				outputVariableNames[outputSelect]
+			);
+
 			if ((written < 0) || (written >= (int) kCommonConstantMaxCharsPerPrintMessage))
 			{
 				fputs("Warning: human-consumable output line truncated\n", stderr);
@@ -2149,8 +2703,15 @@ printHumanConsumableOutput(
 #ifdef NO_OS_AVAILABLE
 			char    tempString[kCommonConstantMaxCharsPerPrintMessage];
 			int     written;
+			ssize_t resultSize;
 
-			written = snprintf(tempString, kCommonConstantMaxCharsPerPrintMessage, "%s:", outputVariableDescriptions[outputSelect]);
+			written = snprintf(
+				tempString,
+				kCommonConstantMaxCharsPerPrintMessage,
+				"%s:",
+				outputVariableDescriptions[outputSelect]
+			);
+
 			if ((written < 0) || (written >= (int) kCommonConstantMaxCharsPerPrintMessage))
 			{
 				fputs("Warning: human-consumable output line truncated\n", stderr);
@@ -2158,6 +2719,28 @@ printHumanConsumableOutput(
 			puts(tempString);
 			snprintf(tempString, kCommonConstantMaxCharsPerPrintMessage, "%lf", outputVariables[outputSelect]);
 			puts(tempString);
+
+			resultSize = UxHwDoubleDistributionToByteArray(
+				outputVariables[outputSelect],
+				(uint8_t *) (tempString),
+				(uint32_t) kCommonConstantMaxCharsPerPrintMessage
+			);
+
+			if (resultSize < 0)
+			{
+				fputs("Warning: could not convert double to byte array\n", stderr);
+			}
+			else
+			{
+				puts("  Byte array: ");
+
+				for (ssize_t ii = 0; ii < resultSize; ii++)
+				{
+					putHexChar(tempString[ii]);
+				}
+
+				puts("\r\n");
+			}
 #else
 			printf("%s: %lf\n", outputVariableDescriptions[outputSelect], outputVariables[outputSelect]);
 #endif
